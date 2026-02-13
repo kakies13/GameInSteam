@@ -34,6 +34,7 @@ Desktop.ini
 main.py
 ui.py
 steam_handler.py
+updater.py
 build.bat
 installer.iss
 requirements.txt
