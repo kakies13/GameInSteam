@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Build Artifacts
+build/
+dist/
+Output/
+*.spec
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs
+*.log
+
+# Source Code (private)
+main.py
+ui.py
+steam_handler.py
+build.bat
+installer.iss
+requirements.txt
+

@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GameInSteam — Steam Library Manager</title>
+    <meta name="description" content="Add any game to your Steam library with one click. Fast, automated, and beautiful.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        /* ═══════════ RESET & BASE ═══════════ */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #0e1117;
+            color: #c7d5e0;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        a { color: #66c0f4; text-decoration: none; transition: color .2s; }
+        a:hover { color: #7fd1ff; }
+        img { max-width: 100%; display: block; }
+
+        /* ═══════════ LAYOUT ═══════════ */
+        .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+        section { padding: 100px 0; }
+
+        /* ═══════════ NAV ═══════════ */
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            background: rgba(14,17,23,.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(102,192,244,.08);
+            transition: box-shadow .3s;
+        }
+        nav.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,.4); }
+        .nav-inner {
+            display: flex; align-items: center; justify-content: space-between;
+            height: 64px; max-width: 1140px; margin: 0 auto; padding: 0 24px;
+        }
+        .nav-logo { font-size: 20px; font-weight: 800; color: #fff; }
+        .nav-logo span { color: #66c0f4; }
+        .nav-links { display: flex; align-items: center; gap: 28px; }
+        .nav-links a { font-size: 14px; font-weight: 500; color: #8f98a0; transition: color .2s; }
+        .nav-links a:hover { color: #fff; }
+        .lang-switch {
+            display: flex; gap: 4px; background: rgba(255,255,255,.06);
+            border-radius: 8px; padding: 3px;
+        }
+        .lang-btn {
+            padding: 5px 12px; border-radius: 6px; cursor: pointer; border: none;
+            background: transparent; color: #8f98a0; font-size: 12px; font-weight: 600;
+            font-family: inherit; transition: all .2s;
+        }
+        .lang-btn.active { background: #66c0f4; color: #0e1117; }
+        .lang-btn:hover:not(.active) { color: #fff; background: rgba(255,255,255,.08); }
+
+        /* ═══════════ HERO ═══════════ */
+        .hero {
+            min-height: 100vh; display: flex; align-items: center;
+            position: relative; overflow: hidden; padding-top: 64px;
+        }
+        .hero::before {
+            content: ''; position: absolute; inset: 0;
+            background:
+                radial-gradient(ellipse 60% 50% at 50% 0%, rgba(102,192,244,.10) 0%, transparent 70%),
+                radial-gradient(ellipse 40% 60% at 80% 80%, rgba(91,163,43,.06) 0%, transparent 60%);
+            pointer-events: none;
+        }
+        .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+        .hero-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: rgba(102,192,244,.1); border: 1px solid rgba(102,192,244,.2);
+            border-radius: 100px; padding: 6px 16px 6px 10px;
+            font-size: 13px; font-weight: 500; color: #66c0f4; margin-bottom: 24px;
+        }
+        .hero-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #5ba32b; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+        .hero h1 { font-size: 52px; font-weight: 900; line-height: 1.08; color: #fff; margin-bottom: 20px; }
+        .hero h1 .accent { color: #66c0f4; }
+        .hero p { font-size: 18px; color: #8f98a0; max-width: 480px; margin-bottom: 36px; line-height: 1.7; }
+        .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 14px 28px; border-radius: 10px; font-size: 15px; font-weight: 700;
+            cursor: pointer; border: none; font-family: inherit; transition: all .25s;
+        }
+        .btn-primary { background: #66c0f4; color: #0e1117; }
+        .btn-primary:hover { background: #7fd1ff; transform: translateY(-2px); box-shadow: 0 8px 30px rgba(102,192,244,.25); }
+        .btn-secondary { background: rgba(255,255,255,.06); color: #c7d5e0; border: 1px solid rgba(255,255,255,.1); }
+        .btn-secondary:hover { background: rgba(255,255,255,.1); transform: translateY(-2px); }
+        .hero-visual {
+            position: relative; display: flex; justify-content: center;
+        }
+        .app-preview {
+            width: 100%; max-width: 520px;
+            background: #1b2838; border-radius: 12px;
+            border: 1px solid rgba(102,192,244,.15);
+            box-shadow: 0 24px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04);
+            overflow: hidden;
+        }
+        .app-titlebar {
+            display: flex; align-items: center; gap: 8px;
+            padding: 12px 16px; background: #171a21; border-bottom: 1px solid rgba(255,255,255,.06);
+        }
+        .app-dot { width: 12px; height: 12px; border-radius: 50%; }
+        .app-dot.r { background: #c74040; } .app-dot.y { background: #d4a017; } .app-dot.g { background: #5ba32b; }
+        .app-titlebar span { font-size: 13px; color: #8f98a0; margin-left: 8px; }
+        .app-body { padding: 24px; }
+        .app-body .app-row { display: flex; gap: 12px; margin-bottom: 12px; align-items: center; }
+        .app-body .app-input {
+            flex: 1; height: 40px; background: #32404e; border-radius: 6px;
+            border: 1px solid #3d5a73; display: flex; align-items: center; padding: 0 12px;
+            font-size: 13px; color: #66c0f4;
+        }
+        .app-body .app-label { font-size: 12px; color: #8f98a0; width: 60px; }
+        .app-btn-mock {
+            width: 100%; height: 44px; background: #66c0f4; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; color: #0e1117; font-size: 14px; margin-top: 16px;
+        }
+        .app-progress {
+            height: 4px; background: #2a475e; border-radius: 4px; margin-top: 14px; overflow: hidden;
+        }
+        .app-progress-fill {
+            width: 73%; height: 100%; background: linear-gradient(90deg, #66c0f4, #7fd1ff);
+            border-radius: 4px; animation: progAnim 3s ease-in-out infinite;
+        }
+        @keyframes progAnim { 0% { width: 10%; } 50% { width: 78%; } 100% { width: 10%; } }
+        .app-pct { text-align: right; font-size: 12px; color: #66c0f4; font-weight: 700; margin-top: 4px; }
+
+        /* ═══════════ STATS ═══════════ */
+        .stats {
+            padding: 40px 0; border-top: 1px solid rgba(255,255,255,.05);
+            border-bottom: 1px solid rgba(255,255,255,.05);
+        }
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 32px; text-align: center;
+        }
+        .stat-num { font-size: 36px; font-weight: 900; color: #fff; }
+        .stat-num span { color: #66c0f4; }
+        .stat-label { font-size: 13px; color: #8f98a0; margin-top: 4px; }
+
+        /* ═══════════ FEATURES ═══════════ */
+        .features { background: #0a0d12; }
+        .section-tag {
+            display: inline-block; font-size: 12px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 2px; color: #66c0f4;
+            margin-bottom: 16px;
+        }
+        .section-title { font-size: 40px; font-weight: 800; color: #fff; margin-bottom: 16px; }
+        .section-desc { font-size: 17px; color: #8f98a0; max-width: 560px; margin-bottom: 56px; }
+        .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        .feat-card {
+            background: rgba(27,40,56,.6); border: 1px solid rgba(61,90,115,.3);
+            border-radius: 14px; padding: 32px 28px; transition: all .3s;
+            position: relative; overflow: hidden;
+        }
+        .feat-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, #66c0f4, #5ba32b); opacity: 0; transition: opacity .3s;
+        }
+        .feat-card:hover { border-color: rgba(102,192,244,.3); transform: translateY(-4px); }
+        .feat-card:hover::before { opacity: 1; }
+        .feat-icon {
+            width: 48px; height: 48px; border-radius: 12px;
+            background: rgba(102,192,244,.1); display: flex; align-items: center;
+            justify-content: center; font-size: 22px; margin-bottom: 18px;
+        }
+        .feat-card h3 { font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+        .feat-card p { font-size: 14px; color: #8f98a0; line-height: 1.7; }
+
+        /* ═══════════ HOW IT WORKS ═══════════ */
+        .how-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; margin-top: 56px; }
+        .how-step { text-align: center; position: relative; }
+        .how-num {
+            width: 56px; height: 56px; border-radius: 50%;
+            background: linear-gradient(135deg, #66c0f4, #3d7ab5);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; font-weight: 900; color: #fff; margin: 0 auto 20px;
+        }
+        .how-step h3 { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+        .how-step p { font-size: 14px; color: #8f98a0; }
+        .how-arrow {
+            position: absolute; top: 28px; right: -24px;
+            font-size: 20px; color: rgba(102,192,244,.3);
+        }
+
+        /* ═══════════ SECURITY ═══════════ */
+        .security { background: #0a0d12; }
+        .security-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; margin-top: 48px; }
+        .security-visual {
+            background: #0d1117; border: 1px solid rgba(91,163,43,.2);
+            border-radius: 14px; padding: 28px; position: relative; overflow: hidden;
+        }
+        .security-visual::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, #5ba32b, #66c0f4);
+        }
+        .vt-header {
+            display: flex; align-items: center; gap: 12px; margin-bottom: 20px;
+            padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,.06);
+        }
+        .vt-logo {
+            width: 36px; height: 36px; border-radius: 8px;
+            background: rgba(91,163,43,.15); display: flex; align-items: center;
+            justify-content: center; font-size: 18px;
+        }
+        .vt-header-text h4 { font-size: 14px; font-weight: 700; color: #fff; }
+        .vt-header-text span { font-size: 12px; color: #8f98a0; }
+        .vt-result {
+            display: flex; align-items: center; justify-content: center;
+            gap: 16px; padding: 24px 0; text-align: center;
+        }
+        .vt-score {
+            width: 88px; height: 88px; border-radius: 50%;
+            border: 4px solid #5ba32b; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: rgba(91,163,43,.08);
+        }
+        .vt-score .big { font-size: 28px; font-weight: 900; color: #5ba32b; line-height: 1; }
+        .vt-score .small { font-size: 10px; color: #8f98a0; margin-top: 2px; }
+        .vt-detail { text-align: left; }
+        .vt-detail .vt-clean { font-size: 20px; font-weight: 800; color: #5ba32b; }
+        .vt-detail p { font-size: 13px; color: #8f98a0; margin-top: 4px; }
+        .vt-engines {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
+            margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.06);
+        }
+        .vt-engine {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px; color: #8f98a0; padding: 4px 0;
+        }
+        .vt-engine .vt-ok { color: #5ba32b; font-weight: 700; font-size: 13px; }
+        .security-info h3 { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 16px; }
+        .security-info p { font-size: 15px; color: #8f98a0; line-height: 1.7; margin-bottom: 12px; }
+        .security-badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+        .sec-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+            background: rgba(91,163,43,.1); border: 1px solid rgba(91,163,43,.2); color: #5ba32b;
+        }
+        .sec-badge.blue {
+            background: rgba(102,192,244,.1); border-color: rgba(102,192,244,.2); color: #66c0f4;
+        }
+
+        /* ═══════════ COMPARISON ═══════════ */
+        .comparison { background: #0e1117; }
+        .comp-table {
+            width: 100%; border-collapse: collapse; margin-top: 48px;
+            border-radius: 14px; overflow: hidden;
+            border: 1px solid rgba(61,90,115,.3);
+        }
+        .comp-table th, .comp-table td {
+            padding: 16px 20px; text-align: center; font-size: 14px;
+            border-bottom: 1px solid rgba(61,90,115,.15);
+        }
+        .comp-table thead { background: #1b2838; }
+        .comp-table th { color: #8f98a0; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
+        .comp-table th:first-child { text-align: left; }
+        .comp-table th.hl { color: #66c0f4; background: rgba(102,192,244,.08); }
+        .comp-table td { color: #c7d5e0; }
+        .comp-table td:first-child { text-align: left; font-weight: 500; color: #fff; }
+        .comp-table td.hl { background: rgba(102,192,244,.04); }
+        .comp-table tbody tr { background: rgba(27,40,56,.3); transition: background .2s; }
+        .comp-table tbody tr:hover { background: rgba(27,40,56,.6); }
+        .check { color: #5ba32b; font-weight: 700; }
+        .cross { color: #c74040; font-weight: 700; }
+        .partial { color: #d4a017; font-weight: 700; }
+
+        /* ═══════════ CTA ═══════════ */
+        .cta {
+            text-align: center; position: relative;
+            background: linear-gradient(180deg, #0e1117 0%, #121820 100%);
+        }
+        .cta::before {
+            content: ''; position: absolute; top: -1px; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, #66c0f4, transparent);
+        }
+        .cta h2 { font-size: 42px; font-weight: 900; color: #fff; margin-bottom: 16px; }
+        .cta p { font-size: 17px; color: #8f98a0; max-width: 480px; margin: 0 auto 36px; }
+        .cta .btn-primary { font-size: 17px; padding: 16px 40px; }
+
+        /* ═══════════ FOOTER ═══════════ */
+        footer {
+            padding: 32px 0; text-align: center; font-size: 13px; color: #4a5568;
+            border-top: 1px solid rgba(255,255,255,.04);
+        }
+
+        /* ═══════════ RESPONSIVE ═══════════ */
+        @media (max-width: 900px) {
+            .hero-grid, .feat-grid, .how-grid, .security-grid { grid-template-columns: 1fr; }
+            .hero h1 { font-size: 36px; }
+            .hero-visual { margin-top: 40px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 24px; }
+            .how-arrow { display: none; }
+            .nav-links a.desktop { display: none; }
+            .comp-table { font-size: 12px; }
+            .comp-table th, .comp-table td { padding: 10px 8px; }
+            section { padding: 60px 0; }
+        }
+        @media (max-width: 600px) {
+            .hero h1 { font-size: 28px; }
+            .section-title { font-size: 28px; }
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .hero-actions { flex-direction: column; }
+        }
+
+        /* ═══════════ ANIMATIONS ═══════════ */
+        .fade-up {
+            opacity: 0; transform: translateY(30px);
+            transition: opacity .6s ease, transform .6s ease;
+        }
+        .fade-up.visible { opacity: 1; transform: translateY(0); }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════ NAV ═══════════ -->
+<nav id="nav">
+    <div class="nav-inner">
+        <div class="nav-logo">Game<span>In</span>Steam</div>
+        <div class="nav-links">
+            <a href="#features" class="desktop" data-i18n="nav_features">Features</a>
+            <a href="#how" class="desktop" data-i18n="nav_how">How It Works</a>
+            <a href="#security" class="desktop" data-i18n="nav_security">Security</a>
+            <a href="#compare" class="desktop" data-i18n="nav_compare">Compare</a>
+            <div class="lang-switch">
+                <button class="lang-btn active" onclick="setLang('en')">EN</button>
+                <button class="lang-btn" onclick="setLang('de')">DE</button>
+                <button class="lang-btn" onclick="setLang('tr')">TR</button>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- ═══════════ HERO ═══════════ -->
+<section class="hero">
+    <div class="container">
+        <div class="hero-grid">
+            <div class="fade-up">
+                <div class="hero-badge">
+                    <div class="dot"></div>
+                    <span data-i18n="hero_badge">Fast & Trusted</span>
+                </div>
+                <h1 data-i18n="hero_title">Your Steam Library, <span class="accent">Unlimited.</span></h1>
+                <p data-i18n="hero_desc">Add any game to your Steam library with a single click. Fully automated — no manual file editing, no technical knowledge required.</p>
+                <div class="hero-actions">
+                    <a href="#download" class="btn btn-primary" data-i18n="hero_cta">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Download for Windows
+                    </a>
+                    <a href="#features" class="btn btn-secondary" data-i18n="hero_learn">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                        Learn More
+                    </a>
+                </div>
+            </div>
+            <div class="hero-visual fade-up">
+                <div class="app-preview">
+                    <div class="app-titlebar">
+                        <div class="app-dot r"></div>
+                        <div class="app-dot y"></div>
+                        <div class="app-dot g"></div>
+                        <span>GameInSteam v2.2</span>
+                    </div>
+                    <div class="app-body">
+                        <div class="app-row">
+                            <div class="app-label">App ID</div>
+                            <div class="app-input">730</div>
+                        </div>
+                        <div class="app-row">
+                            <div class="app-label" data-i18n="app_name_label">Name</div>
+                            <div class="app-input">Counter-Strike 2</div>
+                        </div>
+                        <div class="app-btn-mock" data-i18n="app_add_btn">&#9889; Add Game</div>
+                        <div class="app-progress"><div class="app-progress-fill"></div></div>
+                        <div class="app-pct">73%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════ STATS ═══════════ -->
+<div class="stats">
+    <div class="container">
+        <div class="stats-grid fade-up">
+            <div><div class="stat-num"><span>1</span></div><div class="stat-label" data-i18n="stat_click">Click to Add</div></div>
+            <div><div class="stat-num"><span>~15</span>s</div><div class="stat-label" data-i18n="stat_speed">Average Speed</div></div>
+            <div><div class="stat-num"><span>100</span>%</div><div class="stat-label" data-i18n="stat_auto">Fully Automated</div></div>
+            <div><div class="stat-num"><span>72</span>/72</div><div class="stat-label" data-i18n="stat_safe">Virus Scan Clean</div></div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════ FEATURES ═══════════ -->
+<section class="features" id="features">
+    <div class="container">
+        <div class="section-tag" data-i18n="feat_tag">Features</div>
+        <h2 class="section-title fade-up" data-i18n="feat_title">Everything You Need. Nothing You Don't.</h2>
+        <p class="section-desc fade-up" data-i18n="feat_desc">GameInSteam combines powerful automation with a sleek interface, making game management effortless.</p>
+        <div class="feat-grid">
+            <div class="feat-card fade-up">
+                <div class="feat-icon">&#9889;</div>
+                <h3 data-i18n="f1_title">One-Click Adding</h3>
+                <p data-i18n="f1_desc">Enter an App ID, click the button — done. No manual file copying, no terminal commands, no headaches.</p>
+            </div>
+            <div class="feat-card fade-up">
+                <div class="feat-icon">&#128640;</div>
+                <h3 data-i18n="f2_title">Lightning Fast</h3>
+                <p data-i18n="f2_desc">The entire process takes about 15 seconds. Enter an ID, sit back, and your game is ready in your Steam library.</p>
+            </div>
+            <div class="feat-card fade-up">
+                <div class="feat-icon">&#128736;</div>
+                <h3 data-i18n="f3_title">Game Management</h3>
+                <p data-i18n="f3_desc">View all your added games with cover art, update to latest versions, or remove them cleanly — all from one panel.</p>
+            </div>
+            <div class="feat-card fade-up">
+                <div class="feat-icon">&#127912;</div>
+                <h3 data-i18n="f4_title">Steam-Themed UI</h3>
+                <p data-i18n="f4_desc">A beautiful, modern interface that feels native to Steam. Dark theme, smooth animations, and in-app notifications.</p>
+            </div>
+            <div class="feat-card fade-up">
+                <div class="feat-icon">&#128202;</div>
+                <h3 data-i18n="f5_title">Live Progress Bar</h3>
+                <p data-i18n="f5_desc">Track every step in real-time with a percentage-based progress bar. Always know exactly what's happening.</p>
+            </div>
+            <div class="feat-card fade-up">
+                <div class="feat-icon">&#128737;</div>
+                <h3 data-i18n="f6_title">Smart Validation</h3>
+                <p data-i18n="f6_desc">Every downloaded file is verified against Cloudflare blocks and corruption before being placed — protecting your Steam installation.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════ HOW IT WORKS ═══════════ -->
+<section id="how">
+    <div class="container">
+        <div class="section-tag" data-i18n="how_tag">How It Works</div>
+        <h2 class="section-title fade-up" data-i18n="how_title">Three Steps. That's It.</h2>
+        <p class="section-desc fade-up" data-i18n="how_desc">No setup guides, no tutorials needed. GameInSteam handles the entire process automatically.</p>
+        <div class="how-grid">
+            <div class="how-step fade-up">
+                <div class="how-num">1</div>
+                <h3 data-i18n="s1_title">Enter App ID</h3>
+                <p data-i18n="s1_desc">Copy the App ID from any Steam store page and paste it into GameInSteam.</p>
+                <div class="how-arrow">&#10132;</div>
+            </div>
+            <div class="how-step fade-up">
+                <div class="how-num">2</div>
+                <h3 data-i18n="s2_title">Click Add</h3>
+                <p data-i18n="s2_desc">Hit the button. GameInSteam handles everything in the background automatically.</p>
+                <div class="how-arrow">&#10132;</div>
+            </div>
+            <div class="how-step fade-up">
+                <div class="how-num">3</div>
+                <h3 data-i18n="s3_title">Play</h3>
+                <p data-i18n="s3_desc">Steam restarts with the game in your library. Install and enjoy.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════ SECURITY ═══════════ -->
+<section class="security" id="security">
+    <div class="container">
+        <div class="section-tag" data-i18n="sec_tag">Security</div>
+        <h2 class="section-title fade-up" data-i18n="sec_title">100% Clean. Zero Threats.</h2>
+        <p class="section-desc fade-up" data-i18n="sec_desc">GameInSteam is verified clean by industry-leading antivirus engines. Your safety is our priority.</p>
+        <div class="security-grid">
+            <div class="security-visual fade-up">
+                <div class="vt-header">
+                    <div class="vt-logo">🛡️</div>
+                    <div class="vt-header-text">
+                        <h4>VirusTotal Scan Report</h4>
+                        <span>GameInSteam.exe — SHA256: 59E73A...3F3055</span>
+                    </div>
+                </div>
+                <div class="vt-result">
+                    <div class="vt-score">
+                        <div class="big">72</div>
+                        <div class="small" data-i18n="vt_of">/72 ✓</div>
+                    </div>
+                    <div class="vt-detail">
+                        <div class="vt-clean" data-i18n="vt_clean">No Threats Detected</div>
+                        <p data-i18n="vt_info">Scanned by 72 antivirus engines.<br>All returned clean.</p>
+                    </div>
+                </div>
+                <div class="vt-engines">
+                    <div class="vt-engine"><span class="vt-ok">✓</span> Windows Defender</div>
+                    <div class="vt-engine"><span class="vt-ok">✓</span> Kaspersky</div>
+                    <div class="vt-engine"><span class="vt-ok">✓</span> Avast</div>
+                    <div class="vt-engine"><span class="vt-ok">✓</span> Bitdefender</div>
+                    <div class="vt-engine"><span class="vt-ok">✓</span> ESET-NOD32</div>
+                    <div class="vt-engine"><span class="vt-ok">✓</span> Malwarebytes</div>
+                    <div class="vt-engine"><span class="vt-ok">✓</span> Norton</div>
+                    <div class="vt-engine"><span class="vt-ok">✓</span> McAfee</div>
+                    <div class="vt-engine"><span class="vt-ok">✓</span> Avira</div>
+                    <div class="vt-engine"><span class="vt-ok">✓</span> Sophos</div>
+                    <div class="vt-engine"><span class="vt-ok">✓</span> Trend Micro</div>
+                    <div class="vt-engine"><span class="vt-ok">✓</span> <span data-i18n="vt_more">+61 more engines</span></div>
+                </div>
+            </div>
+            <div class="security-info fade-up">
+                <h3 data-i18n="sec_why_title">Why Is It Safe?</h3>
+                <p data-i18n="sec_why_1">🔓 <strong>Trusted Software</strong> — Built by real developers with a focus on security. No hidden code, no backdoors.</p>
+                <p data-i18n="sec_why_2">🛡️ <strong>VirusTotal Verified</strong> — Scanned by 72+ antivirus engines including Kaspersky, Norton, ESET, and Windows Defender. Zero detections.</p>
+                <p data-i18n="sec_why_3">📦 <strong>No Hidden Processes</strong> — The app only modifies Steam config files (Lua scripts & manifests). No background miners, no telemetry, no data collection.</p>
+                <p data-i18n="sec_why_4">🔄 <strong>Transparent Operations</strong> — Every step is shown in real-time with a progress bar. You see exactly what's happening at all times.</p>
+                <div class="security-badges">
+                    <div class="sec-badge">🛡️ <span data-i18n="badge_vt">VirusTotal 72/72 Clean</span></div>
+                    <div class="sec-badge">🔓 <span data-i18n="badge_os">Trusted</span></div>
+                    <div class="sec-badge blue">📦 <span data-i18n="badge_no_mal">No Malware</span></div>
+                    <div class="sec-badge blue">🚫 <span data-i18n="badge_no_track">No Tracking</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════ COMPARISON ═══════════ -->
+<section class="comparison" id="compare">
+    <div class="container">
+        <div class="section-tag" data-i18n="comp_tag">Comparison</div>
+        <h2 class="section-title fade-up" data-i18n="comp_title">Why GameInSteam?</h2>
+        <p class="section-desc fade-up" data-i18n="comp_desc">See how we stack up against alternative methods and tools.</p>
+        <table class="comp-table fade-up">
+            <thead>
+                <tr>
+                    <th data-i18n="comp_feature">Feature</th>
+                    <th class="hl">GameInSteam</th>
+                    <th>GreenLuma</th>
+                    <th data-i18n="comp_manual">Manual Method</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td data-i18n="c1">One-Click Game Adding</td>
+                    <td class="hl check">&#10003;</td>
+                    <td class="cross">&#10007;</td>
+                    <td class="cross">&#10007;</td>
+                </tr>
+                <tr>
+                    <td data-i18n="c2">Modern GUI</td>
+                    <td class="hl check">&#10003;</td>
+                    <td class="partial">~</td>
+                    <td class="cross">&#10007;</td>
+                </tr>
+                <tr>
+                    <td data-i18n="c3">Auto Depot Key Download</td>
+                    <td class="hl check">&#10003;</td>
+                    <td class="cross">&#10007;</td>
+                    <td class="partial">~</td>
+                </tr>
+                <tr>
+                    <td data-i18n="c4">Game Management (Update/Remove)</td>
+                    <td class="hl check">&#10003;</td>
+                    <td class="partial">~</td>
+                    <td class="cross">&#10007;</td>
+                </tr>
+                <tr>
+                    <td data-i18n="c5">Game Cover Art & Library View</td>
+                    <td class="hl check">&#10003;</td>
+                    <td class="cross">&#10007;</td>
+                    <td class="cross">&#10007;</td>
+                </tr>
+                <tr>
+                    <td data-i18n="c6">Auto Steam Restart & Cache Clear</td>
+                    <td class="hl check">&#10003;</td>
+                    <td class="cross">&#10007;</td>
+                    <td class="cross">&#10007;</td>
+                </tr>
+                <tr>
+                    <td data-i18n="c7">Real-Time Progress Tracking</td>
+                    <td class="hl check">&#10003;</td>
+                    <td class="cross">&#10007;</td>
+                    <td class="cross">&#10007;</td>
+                </tr>
+                <tr>
+                    <td data-i18n="c8">Beginner Friendly</td>
+                    <td class="hl check">&#10003;</td>
+                    <td class="partial">~</td>
+                    <td class="cross">&#10007;</td>
+                </tr>
+                <tr>
+                    <td data-i18n="c9">Adds Games by App ID Only</td>
+                    <td class="hl check">&#10003;</td>
+                    <td class="check">&#10003;</td>
+                    <td class="check">&#10003;</td>
+                </tr>
+                <tr>
+                    <td data-i18n="c10">DLC Unlock Support</td>
+                    <td class="hl check">&#10003;</td>
+                    <td class="check">&#10003;</td>
+                    <td class="partial">~</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- ═══════════ CTA ═══════════ -->
+<section class="cta" id="download">
+    <div class="container fade-up">
+        <h2 data-i18n="cta_title">Ready to Unlock Your Library?</h2>
+        <p data-i18n="cta_desc">Download GameInSteam now and add your first game in under 30 seconds.</p>
+        <a href="#" class="btn btn-primary" data-i18n="cta_btn">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download v2.2 — Windows
+        </a>
+    </div>
+</section>
+
+<!-- ═══════════ FOOTER ═══════════ -->
+<footer>
+    <div class="container">
+        <p>&copy; 2026 GameInSteam. <span data-i18n="footer">Not affiliated with Valve or Steam.</span></p>
+    </div>
+</footer>
+
+<script>
+// ═══════════ i18n ═══════════
+const T = {
+en: {
+    nav_features: "Features", nav_how: "How It Works", nav_security: "Security", nav_compare: "Compare",
+    hero_badge: "Fast & Trusted",
+    hero_title: 'Your Steam Library, <span class="accent">Unlimited.</span>',
+    hero_desc: "Add any game to your Steam library with a single click. Fully automated — no manual file editing, no technical knowledge required.",
+    hero_cta: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download for Windows',
+    hero_learn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> Learn More',
+    app_name_label: "Name", app_add_btn: "&#9889; Add Game",
+    stat_click: "Click to Add", stat_speed: "Average Speed", stat_auto: "Fully Automated", stat_safe: "Virus Scan Clean",
+    feat_tag: "Features", feat_title: "Everything You Need. Nothing You Don't.", feat_desc: "GameInSteam combines powerful automation with a sleek interface, making game management effortless.",
+    f1_title: "One-Click Adding", f1_desc: "Enter an App ID, click the button — done. No manual file copying, no terminal commands, no headaches.",
+    f2_title: "Lightning Fast", f2_desc: "The entire process takes about 15 seconds. Enter an ID, sit back, and your game is ready in your Steam library.",
+    f3_title: "Game Management", f3_desc: "View all your added games with cover art, update to latest versions, or remove them cleanly — all from one panel.",
+    f4_title: "Steam-Themed UI", f4_desc: "A beautiful, modern interface that feels native to Steam. Dark theme, smooth animations, and in-app notifications.",
+    f5_title: "Live Progress Bar", f5_desc: "Track every step in real-time with a percentage-based progress bar. Always know exactly what's happening.",
+    f6_title: "Smart Validation", f6_desc: "Every downloaded file is verified against Cloudflare blocks and corruption before being placed — protecting your Steam installation.",
+    how_tag: "How It Works", how_title: "Three Steps. That's It.", how_desc: "No setup guides, no tutorials needed. GameInSteam handles the entire process automatically.",
+    s1_title: "Enter App ID", s1_desc: "Copy the App ID from any Steam store page and paste it into GameInSteam.",
+    s2_title: "Click Add", s2_desc: "Hit the button. GameInSteam handles everything in the background automatically.",
+    s3_title: "Play", s3_desc: "Steam restarts with the game in your library. Install and enjoy.",
+    sec_tag: "Security", sec_title: "100% Clean. Zero Threats.", sec_desc: "GameInSteam is verified clean by industry-leading antivirus engines. Your safety is our priority.",
+    vt_of: "/72 ✓", vt_clean: "All Engines Clean", vt_info: "Scanned by 72 antivirus engines.<br>All returned clean.", vt_more: "+61 more engines",
+    sec_why_title: "Why Is It Safe?",
+    sec_why_1: '🔓 <strong>Trusted Software</strong> — Built by real developers with a focus on security. No hidden code, no backdoors.',
+    sec_why_2: '🛡️ <strong>VirusTotal Verified</strong> — Scanned by 72+ antivirus engines including Kaspersky, Norton, ESET, and Windows Defender. Zero detections.',
+    sec_why_3: '📦 <strong>No Hidden Processes</strong> — The app only modifies Steam config files. No background miners, no telemetry, no data collection.',
+    sec_why_4: '🔄 <strong>Transparent Operations</strong> — Every step is shown in real-time with a progress bar. You see exactly what\'s happening at all times.',
+    badge_vt: "VirusTotal 72/72 Clean", badge_os: "Trusted", badge_no_mal: "No Malware", badge_no_track: "No Tracking",
+    comp_tag: "Comparison", comp_title: "Why GameInSteam?", comp_desc: "See how we stack up against alternative methods and tools.", comp_feature: "Feature", comp_manual: "Manual Method",
+    c1: "One-Click Game Adding", c2: "Modern GUI", c3: "Auto Depot Key Download", c4: "Game Management (Update/Remove)", c5: "Game Cover Art & Library View", c6: "Auto Steam Restart & Cache Clear", c7: "Real-Time Progress Tracking", c8: "Beginner Friendly", c9: "Adds Games by App ID Only", c10: "DLC Unlock Support",
+    cta_title: "Ready to Unlock Your Library?", cta_desc: "Download GameInSteam now and add your first game in under 30 seconds.",
+    cta_btn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download v2.2 — Windows',
+    footer: "Not affiliated with Valve or Steam."
+},
+de: {
+    nav_features: "Funktionen", nav_how: "So funktioniert's", nav_security: "Sicherheit", nav_compare: "Vergleich",
+    hero_badge: "Schnell & Vertrauenswürdig",
+    hero_title: 'Deine Steam-Bibliothek, <span class="accent">Grenzenlos.</span>',
+    hero_desc: "Füge jedes Spiel mit einem Klick zu deiner Steam-Bibliothek hinzu. Vollautomatisch — kein manuelles Bearbeiten, keine technischen Vorkenntnisse nötig.",
+    hero_cta: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download für Windows',
+    hero_learn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> Mehr erfahren',
+    app_name_label: "Name", app_add_btn: "&#9889; Spiel hinzufügen",
+    stat_click: "Klick zum Hinzufügen", stat_speed: "Durchschnitt", stat_auto: "Vollautomatisch", stat_safe: "Virenscan Sauber",
+    feat_tag: "Funktionen", feat_title: "Alles was du brauchst. Nichts was du nicht brauchst.", feat_desc: "GameInSteam kombiniert leistungsstarke Automatisierung mit einer eleganten Oberfläche.",
+    f1_title: "Ein-Klick Hinzufügen", f1_desc: "App ID eingeben, Button klicken — fertig. Kein manuelles Kopieren, keine Terminal-Befehle.",
+    f2_title: "Blitzschnell", f2_desc: "Der gesamte Vorgang dauert etwa 15 Sekunden. ID eingeben, zurücklehnen — dein Spiel ist in der Steam-Bibliothek.",
+    f3_title: "Spielverwaltung", f3_desc: "Alle hinzugefügten Spiele mit Cover anzeigen, aktualisieren oder sauber entfernen — alles in einem Panel.",
+    f4_title: "Steam-Design", f4_desc: "Eine moderne Oberfläche, die sich nativ in Steam anfühlt. Dunkles Theme, flüssige Animationen und In-App Benachrichtigungen.",
+    f5_title: "Live-Fortschrittsbalken", f5_desc: "Verfolge jeden Schritt in Echtzeit mit einem prozentualen Fortschrittsbalken. Du weißt immer genau, was passiert.",
+    f6_title: "Intelligente Validierung", f6_desc: "Jede heruntergeladene Datei wird gegen Cloudflare-Blocks und Korruption geprüft — schützt deine Steam-Installation.",
+    how_tag: "So funktioniert's", how_title: "Drei Schritte. Das war's.", how_desc: "Keine Anleitungen, keine Tutorials nötig. GameInSteam erledigt den gesamten Prozess automatisch.",
+    s1_title: "App ID eingeben", s1_desc: "Kopiere die App ID von einer beliebigen Steam-Shopseite und füge sie ein.",
+    s2_title: "Klick auf Hinzufügen", s2_desc: "Drücke den Button. GameInSteam erledigt alles automatisch im Hintergrund.",
+    s3_title: "Spielen", s3_desc: "Steam startet neu mit dem Spiel in deiner Bibliothek. Installieren und genießen.",
+    sec_tag: "Sicherheit", sec_title: "100% Sauber. Keine Bedrohungen.", sec_desc: "GameInSteam wird von führenden Antivirus-Engines als sauber verifiziert. Deine Sicherheit hat Priorität.",
+    vt_of: "/72 ✓", vt_clean: "Alle Engines sauber", vt_info: "Von 72 Antivirus-Engines gescannt.<br>Alle ohne Befund.", vt_more: "+61 weitere Engines",
+    sec_why_title: "Warum ist es sicher?",
+    sec_why_1: '🔓 <strong>Vertrauenswürdige Software</strong> — Von echten Entwicklern mit Fokus auf Sicherheit entwickelt. Kein versteckter Code, keine Hintertüren.',
+    sec_why_2: '🛡️ <strong>VirusTotal Verifiziert</strong> — Von 72+ Antivirus-Engines gescannt, darunter Kaspersky, Norton, ESET und Windows Defender. Null Erkennungen.',
+    sec_why_3: '📦 <strong>Keine versteckten Prozesse</strong> — Die App ändert nur Steam-Konfigurationsdateien. Keine Hintergrund-Miner, keine Telemetrie, keine Datenerfassung.',
+    sec_why_4: '🔄 <strong>Transparente Vorgänge</strong> — Jeder Schritt wird in Echtzeit mit einem Fortschrittsbalken angezeigt. Du siehst jederzeit genau, was passiert.',
+    badge_vt: "VirusTotal 72/72 Sauber", badge_os: "Vertrauenswürdig", badge_no_mal: "Keine Malware", badge_no_track: "Kein Tracking",
+    comp_tag: "Vergleich", comp_title: "Warum GameInSteam?", comp_desc: "Vergleiche uns mit alternativen Methoden und Tools.", comp_feature: "Funktion", comp_manual: "Manuelle Methode",
+    c1: "Ein-Klick Hinzufügen", c2: "Moderne Oberfläche", c3: "Auto Depot-Key Download", c4: "Spielverwaltung (Update/Entfernen)", c5: "Spiel-Cover & Bibliotheksansicht", c6: "Auto Steam-Neustart & Cache löschen", c7: "Echtzeit-Fortschritt", c8: "Anfängerfreundlich", c9: "Spiele nur per App ID", c10: "DLC-Freischaltung",
+    cta_title: "Bereit, deine Bibliothek freizuschalten?", cta_desc: "Lade GameInSteam jetzt herunter und füge dein erstes Spiel in unter 30 Sekunden hinzu.",
+    cta_btn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download v2.2 — Windows',
+    footer: "Nicht mit Valve oder Steam verbunden."
+},
+tr: {
+    nav_features: "Özellikler", nav_how: "Nasıl Çalışır", nav_security: "Güvenlik", nav_compare: "Karşılaştırma",
+    hero_badge: "Hızlı & Güvenilir",
+    hero_title: 'Steam Kütüphanen, <span class="accent">Sınırsız.</span>',
+    hero_desc: "Tek tıkla istediğin oyunu Steam kütüphanene ekle. Tamamen otomatik — dosya düzenleme yok, teknik bilgi gerekmiyor.",
+    hero_cta: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Windows için İndir',
+    hero_learn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> Daha Fazla',
+    app_name_label: "Oyun Adı", app_add_btn: "&#9889; Oyunu Ekle",
+    stat_click: "Tek Tıkla Ekle", stat_speed: "Ortalama Hız", stat_auto: "Tamamen Otomatik", stat_safe: "Virüs Taraması Temiz",
+    feat_tag: "Özellikler", feat_title: "İhtiyacın Olan Her Şey. Fazlası Değil.", feat_desc: "GameInSteam güçlü otomasyonu şık bir arayüzle birleştirerek oyun yönetimini zahmetsiz hale getirir.",
+    f1_title: "Tek Tıkla Ekleme", f1_desc: "App ID gir, butona bas — bitti. Manuel dosya kopyalama yok, terminal komutları yok, baş ağrısı yok.",
+    f2_title: "Yıldırım Hızında", f2_desc: "Tüm süreç yaklaşık 15 saniye sürer. ID gir, arkana yaslan — oyunun Steam kütüphanende hazır.",
+    f3_title: "Oyun Yönetimi", f3_desc: "Eklenen tüm oyunları kapak görselleriyle görüntüle, en son sürümlere güncelle veya temizce kaldır — tek panelden.",
+    f4_title: "Steam Temalı Arayüz", f4_desc: "Steam'e özgü hissettiren güzel, modern bir arayüz. Koyu tema, akıcı animasyonlar ve uygulama içi bildirimler.",
+    f5_title: "Canlı İlerleme Çubuğu", f5_desc: "Her adımı yüzdelik ilerleme çubuğuyla gerçek zamanlı takip et. Ne olduğunu her zaman tam olarak bil.",
+    f6_title: "Akıllı Doğrulama", f6_desc: "İndirilen her dosya Cloudflare engellerine ve bozulmaya karşı doğrulanır — Steam kurulumunuzu korur.",
+    how_tag: "Nasıl Çalışır", how_title: "Üç Adım. Hepsi Bu.", how_desc: "Kurulum rehberi yok, eğitim gerekmiyor. GameInSteam tüm süreci otomatik olarak yönetir.",
+    s1_title: "App ID Gir", s1_desc: "Herhangi bir Steam mağaza sayfasından App ID'yi kopyala ve GameInSteam'e yapıştır.",
+    s2_title: "Ekle'ye Bas", s2_desc: "Butona bas. GameInSteam her şeyi arka planda otomatik olarak halleder.",
+    s3_title: "Oyna", s3_desc: "Steam oyun kütüphanende oyunla birlikte yeniden başlar. Kur ve keyfini çıkar.",
+    sec_tag: "Güvenlik", sec_title: "100% Temiz. Sıfır Tehdit.", sec_desc: "GameInSteam sektör lideri antivirüs motorları tarafından temiz olarak doğrulanmıştır. Güvenliğin bizim önceliğimiz.",
+    vt_of: "/72 ✓", vt_clean: "Tüm Motorlar Temiz", vt_info: "72 antivirüs motoru tarafından tarandı.<br>Tümü temiz döndü.", vt_more: "+61 motor daha",
+    sec_why_title: "Neden Güvenli?",
+    sec_why_1: '🔓 <strong>Güvenilir Yazılım</strong> — Güvenliğe odaklanmış gerçek geliştiriciler tarafından yapıldı. Gizli kod yok, arka kapı yok.',
+    sec_why_2: '🛡️ <strong>VirusTotal Onaylı</strong> — Kaspersky, Norton, ESET ve Windows Defender dahil 72+ antivirüs motoru tarafından tarandı. Sıfır tespit.',
+    sec_why_3: '📦 <strong>Gizli İşlem Yok</strong> — Uygulama sadece Steam yapılandırma dosyalarını değiştirir. Arka plan madencisi yok, veri toplama yok, takip yok.',
+    sec_why_4: '🔄 <strong>Şeffaf İşlemler</strong> — Her adım ilerleme çubuğuyla gerçek zamanlı olarak gösterilir. Ne olduğunu her zaman görürsün.',
+    badge_vt: "VirusTotal 72/72 Temiz", badge_os: "Güvenilir", badge_no_mal: "Zararlı Yazılım Yok", badge_no_track: "Takip Yok",
+    comp_tag: "Karşılaştırma", comp_title: "Neden GameInSteam?", comp_desc: "Alternatif yöntemler ve araçlarla nasıl karşılaştırıldığımızı görün.", comp_feature: "Özellik", comp_manual: "Manuel Yöntem",
+    c1: "Tek Tıkla Oyun Ekleme", c2: "Modern Arayüz", c3: "Otomatik Depot Anahtar İndirme", c4: "Oyun Yönetimi (Güncelle/Kaldır)", c5: "Oyun Kapak Görseli & Kütüphane", c6: "Otomatik Steam Yeniden Başlatma & Önbellek Temizleme", c7: "Gerçek Zamanlı İlerleme Takibi", c8: "Yeni Başlayanlar İçin Uygun", c9: "Sadece App ID ile Oyun Ekleme", c10: "DLC Kilit Açma Desteği",
+    cta_title: "Kütüphaneni Açmaya Hazır Mısın?", cta_desc: "GameInSteam'i şimdi indir ve ilk oyununu 30 saniyede ekle.",
+    cta_btn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> v2.2 İndir — Windows',
+    footer: "Valve veya Steam ile bağlantılı değildir."
+}
+};
+
+let currentLang = 'en';
+
+function setLang(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    // butonları güncelle
+    document.querySelectorAll('.lang-btn').forEach(b => {
+        b.classList.toggle('active', b.textContent.trim().toLowerCase() === lang);
+    });
+    // çevirileri uygula
+    const dict = T[lang] || T.en;
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (dict[key] !== undefined) el.innerHTML = dict[key];
+    });
+}
+
+// ═══════════ SCROLL NAV SHADOW ═══════════
+window.addEventListener('scroll', () => {
+    document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 20);
+});
+
+// ═══════════ SCROLL REVEAL ═══════════
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+// ═══════════ SMOOTH ANCHOR ═══════════
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+        const id = a.getAttribute('href');
+        if (id.length > 1) {
+            e.preventDefault();
+            document.querySelector(id)?.scrollIntoView({ behavior: 'smooth' });
+        }
+    });
+});
+</script>
+</body>
+</html>
+
