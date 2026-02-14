@@ -260,7 +260,9 @@ def download_from_kernelos_selenium(app_id, target_dir):
     before_files = set(os.listdir(target_dir))  # İndirme öncesi dosyalar
     driver, temp_profile = _create_chrome_driver(target_dir)
     if driver is None:
-        return None
+        # Chrome driver başlatılamadı - özel hata kodu
+        print("  ❌ Chrome driver başlatılamadı!")
+        return "CHROME_DRIVER_ERROR"
     
     try:
         # 1. Sayfayı aç (timeout süresini artır)
@@ -688,40 +690,36 @@ def add_shortcut_from_manifest(app_id, app_name, on_progress=None):
         _kill_zombie_chrome()
         file_path = None
     
+    # Chrome driver hatası kontrolü
+    if file_path == "CHROME_DRIVER_ERROR":
+        return False, (
+            "Chrome driver başlatılamadı!\n\n"
+            "Olası sebepler:\n"
+            "• Google Chrome yüklü değil\n"
+            "• Chrome güncel değil\n"
+            "• Chrome erişilemiyor\n\n"
+            "Çözüm:\n"
+            "1. Google Chrome'u indirip kur: https://www.google.com/chrome/\n"
+            "2. Chrome'u güncelle\n"
+            "3. Bilgisayarı yeniden başlat\n"
+            "4. Tekrar dene"
+        )
+    
     if file_path:
         _prog(0.55, "Dosyalar yerleştiriliyor...")
         print(f"📦 İndirilen: {os.path.basename(file_path)}")
         lua_ok, manifest_count = place_game_files(file_path, app_id)
     
     if not lua_ok:
-        # Chrome driver hatası mı kontrol et
-        chrome_error = False
-        if file_path is None:
-            # Chrome driver başlatılamadıysa
-            chrome_error = True
-        
-        if chrome_error:
-            return False, (
-                "Chrome driver başlatılamadı!\n\n"
-                "Olası sebepler:\n"
-                "• Google Chrome yüklü değil\n"
-                "• Chrome güncel değil\n"
-                "• Chrome erişilemiyor\n\n"
-                "Çözüm:\n"
-                "1. Google Chrome'u indirip kur: https://www.google.com/chrome/\n"
-                "2. Chrome'u güncelle\n"
-                "3. Bilgisayarı yeniden başlat\n"
-                "4. Tekrar dene"
-            )
-        else:
-            return False, (
-                "kernelos.org'dan indirme başarısız!\n\n"
-                "Olası sebepler:\n"
-                "• kernelos.org geçici olarak erişilemez\n"
-                "• Ağ bağlantı sorunu\n"
-                "• İnternet bağlantısı yok\n\n"
-                "Çözüm: Birkaç dakika bekle ve tekrar dene."
-            )
+        return False, (
+            "kernelos.org'dan indirme başarısız!\n\n"
+            "Olası sebepler:\n"
+            "• kernelos.org geçici olarak erişilemez\n"
+            "• Ağ bağlantı sorunu\n"
+            "• İnternet bağlantısı yok\n"
+            "• Oyun dosyaları bulunamadı\n\n"
+            "Çözüm: Birkaç dakika bekle ve tekrar dene."
+        )
     
     _prog(0.65, "Temizlik yapılıyor...")
     print(f"\n📊 Sonuç: Lua ✅ | Yöntem: Kernelos | Manifest: {manifest_count}")
