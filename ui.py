@@ -886,7 +886,7 @@ class GameInSteamApp:
     # ─────────────────────────────────────────────────────────
     # DISCORD WEBHOOK FONKSİYONLARI
     # ─────────────────────────────────────────────────────────
-    def _send_discord_webhook(self, title, description, color=0x66c0f4, fields=None):
+    def _send_discord_webhook(self, title, description, color=0x66c0f4, fields=None, thumbnail_url=None, image_url=None):
         """Discord webhook'a mesaj gönder."""
         if not self._config.get("discord_webhook_enabled", True):
             return
@@ -906,6 +906,12 @@ class GameInSteamApp:
             if fields:
                 embed["fields"] = fields
             
+            if thumbnail_url:
+                embed["thumbnail"] = {"url": thumbnail_url}
+            
+            if image_url:
+                embed["image"] = {"url": image_url}
+            
             payload = {
                 "embeds": [embed],
                 "username": "GameInSteam",
@@ -922,29 +928,33 @@ class GameInSteamApp:
     def _send_game_added_notification(self, app_id, game_name, success_count=1, total_count=1):
         """Oyun eklendi bildirimi gönder."""
         if total_count == 1:
-            title = "🎮 Oyun Eklendi"
-            description = f"**{game_name}** (AppID: {app_id}) Steam kütüphanenize eklendi!"
+            title = "Yeni Oyun Kütüphaneye Eklendi!"
+            description = f"**Oyun:** {game_name}\n**App ID:** {app_id}"
             color = 0x5ba32b  # Yeşil
+            # Oyun görseli URL'i
+            thumbnail_url = HEADER_URL.format(app_id)
+            self._send_discord_webhook(title, description, color, thumbnail_url=thumbnail_url)
         else:
             title = "🎮 Oyunlar Eklendi"
             description = f"**{success_count}/{total_count}** oyun başarıyla Steam kütüphanenize eklendi!"
             color = 0x5ba32b if success_count == total_count else 0xd4a017  # Yeşil veya sarı
-        
-        self._send_discord_webhook(title, description, color)
+            self._send_discord_webhook(title, description, color)
     
     def _send_game_updated_notification(self, app_id, game_name):
         """Oyun güncellendi bildirimi gönder."""
         title = "🔄 Oyun Güncellendi"
-        description = f"**{game_name}** (AppID: {app_id}) güncellendi!"
+        description = f"**Oyun:** {game_name}\n**App ID:** {app_id}"
         color = 0x66c0f4  # Mavi
-        self._send_discord_webhook(title, description, color)
+        thumbnail_url = HEADER_URL.format(app_id)
+        self._send_discord_webhook(title, description, color, thumbnail_url=thumbnail_url)
     
     def _send_game_removed_notification(self, app_id, game_name):
         """Oyun kaldırıldı bildirimi gönder."""
         title = "🗑️ Oyun Kaldırıldı"
-        description = f"**{game_name}** (AppID: {app_id}) Steam kütüphanenizden kaldırıldı!"
+        description = f"**Oyun:** {game_name}\n**App ID:** {app_id}"
         color = 0xc74040  # Kırmızı
-        self._send_discord_webhook(title, description, color)
+        thumbnail_url = HEADER_URL.format(app_id)
+        self._send_discord_webhook(title, description, color, thumbnail_url=thumbnail_url)
 
 def main():
     root = tk.Tk()
