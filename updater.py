@@ -11,7 +11,7 @@ import requests
 
 GITHUB_REPO = "kakies13/GameInSteam"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
-CURRENT_VERSION = "2.5"
+CURRENT_VERSION = "2.4"
 
 
 def _parse_version(v: str) -> tuple:

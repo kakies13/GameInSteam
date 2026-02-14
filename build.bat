@@ -56,7 +56,7 @@ if exist "installer.iss" (
         echo Building installer with Inno Setup...
         "%ISCC%" installer.iss
         echo.
-        echo   Installer: Output\GameInSteam_Setup_v2.5.exe
+        echo   Installer: Output\GameInSteam_Setup_v2.4.exe
     ) else (
         echo [INFO] Inno Setup bulunamadi - sadece EXE olusturuldu.
         echo        Installer icin: https://jrsoftware.org/isdl.php

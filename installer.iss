@@ -5,7 +5,7 @@
 ; Derleme: ISCC.exe installer.iss  veya  build.bat
 
 #define MyAppName "GameInSteam"
-#define MyAppVersion "2.5"
+#define MyAppVersion "2.7"
 #define MyAppPublisher "GameInSteam"
 #define MyAppURL "https://gameinsteam.com"
 #define MyAppExeName "GameInSteam.exe"

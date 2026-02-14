@@ -1,13 +1,14 @@
-import glob
 import os
 import re
 import time
 import zipfile
 import shutil
 import subprocess
+import tempfile
 import requests
+import concurrent.futures
 
-# Selenium opsiyonel — sadece kernelos fallback modunda lazım
+# Selenium — kernelos.org'dan indirme için gerekli (Google Chrome)
 try:
     from selenium import webdriver
     from selenium.webdriver.chrome.service import Service
@@ -15,10 +16,15 @@ try:
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
-    from webdriver_manager.chrome import ChromeDriverManager
+    try:
+        from webdriver_manager.chrome import ChromeDriverManager
+        CHROME_DRIVER_MANAGER_AVAILABLE = True
+    except ImportError:
+        CHROME_DRIVER_MANAGER_AVAILABLE = False
     SELENIUM_AVAILABLE = True
 except ImportError:
     SELENIUM_AVAILABLE = False
+    CHROME_DRIVER_MANAGER_AVAILABLE = False
 
 # --- AYARLAR ---
 STEAM_PATH = r"C:\Program Files (x86)\Steam"
@@ -82,81 +88,7 @@ def clear_steam_cache():
 
 
 # =============================================================================
-# 3. MODÜL: LOKAL LUA OLUŞTURUCU (Steam API ile DLC destekli)
-# =============================================================================
-def get_dlc_list(app_id):
-    """
-    Steam Store API'den oyunun DLC listesini çeker.
-    Ücretsiz, API key gerektirmez.
-    Returns: list of DLC app IDs (int) veya boş liste
-    """
-    try:
-        resp = requests.get(
-            STEAM_API_URL,
-            params={"appids": str(app_id), "filters": "basic"},
-            timeout=10,
-        )
-        data = resp.json()
-        app_data = data.get(str(app_id), {})
-        if app_data.get("success") and "data" in app_data:
-            info = app_data["data"]
-            dlc_ids = info.get("dlc", [])
-            return [int(d) for d in dlc_ids]
-    except Exception as e:
-        print(f"⚠️ DLC listesi alınamadı: {e}")
-    return []
-
-
-def generate_local_lua(app_id):
-    """
-    Lokal olarak lua dosyası oluşturur — internetten indirme GEREKMEZ!
-    
-    1. Ana oyun App ID'si ile addappid() satırı oluşturur
-    2. Steam API'den DLC listesini çeker ve onları da ekler
-    3. Dosyayı direkt stplug-in/ dizinine yazar
-    
-    Returns: (lua_path, dlc_count) veya (None, 0)
-    """
-    setup_dirs()
-    
-    app_id = int(app_id)
-    all_ids = [app_id]
-    
-    # Steam API'den DLC'leri çek
-    print(f"🔍 Steam API'den DLC bilgileri çekiliyor...")
-    dlc_ids = get_dlc_list(app_id)
-    if dlc_ids:
-        all_ids.extend(dlc_ids)
-        print(f"  📦 {len(dlc_ids)} DLC bulundu!")
-    else:
-        print(f"  ℹ️ DLC bulunamadı veya DLC'siz oyun.")
-    
-    # Lua içeriği oluştur
-    lines = [
-        f"-- GameInSteam - Lokal oluşturuldu",
-        f"-- Ana oyun: {app_id}",
-        f"-- DLC sayısı: {len(dlc_ids)}",
-        "",
-    ]
-    for aid in all_ids:
-        lines.append(f"addappid({aid})")
-    
-    lua_content = "\n".join(lines) + "\n"
-    
-    # stplug-in dizinine yaz
-    lua_path = os.path.join(STPLUGIN_DIR, f"{app_id}.lua")
-    try:
-        with open(lua_path, "w", encoding="utf-8") as f:
-            f.write(lua_content)
-        print(f"  ✅ Lua oluşturuldu: stplug-in/{app_id}.lua ({len(all_ids)} AppID)")
-        return lua_path, len(dlc_ids)
-    except Exception as e:
-        print(f"  ❌ Lua yazılamadı: {e}")
-        return None, 0
-
-
-# =============================================================================
-# 4. MODÜL: DOSYA DOĞRULAMA (Cloudflare HTML koruması)
+# 3. MODÜL: DOSYA DOĞRULAMA (Cloudflare HTML koruması)
 # =============================================================================
 def _validate_downloaded_file(file_path):
     """
@@ -196,148 +128,386 @@ def _validate_downloaded_file(file_path):
 
 
 # =============================================================================
-# 4A. MODÜL: KERNELOS SELENIUM (Headless — optimize edilmiş)
+# 4. MODÜL: ZOMBİ CHROME TEMİZLİĞİ
+# =============================================================================
+def _kill_zombie_chrome():
+    """Arka planda kalmış headless Chrome ve ChromeDriver processlerini sonlandırır."""
+    try:
+        subprocess.run(
+            ['taskkill', '/F', '/IM', 'chromedriver.exe'],
+            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+    except Exception:
+        pass
+
+
+# =============================================================================
+# 5. MODÜL: CHROME DRIVER OLUŞTURUCU (Basitleştirilmiş)
+# =============================================================================
+def _create_chrome_driver(download_dir):
+    """
+    Google Chrome driver'ı oluşturur — BASİT YAKLAŞIM.
+    
+    Toprak Steam Cracker tarzı: Sadece gerekli ayarlar, temp profil.
+    
+    Returns: (driver, temp_profile_path) veya (None, None)
+    """
+    _kill_zombie_chrome()
+    time.sleep(0.5)
+    
+    temp_profile = tempfile.mkdtemp(prefix="gis_chrome_")
+    
+    try:
+        chrome_options = Options()
+        chrome_options.add_argument(f"--user-data-dir={temp_profile}")
+        # Headless mod (görünmez)
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-logging")
+        chrome_options.add_argument("--log-level=3")  # Sadece fatal hataları göster
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-software-rasterizer")
+        chrome_options.add_argument("--blink-settings=imagesEnabled=false")  # Resimleri yükleme (hızlandırır)
+        chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
+        
+        # Download ayarları: Otomatik indirme, soru sorma
+        prefs = {
+            "download.default_directory": download_dir,
+            "download.prompt_for_download": False,
+            "download.directory_upgrade": True,
+            "safebrowsing.enabled": False,
+            "profile.default_content_setting_values.automatic_downloads": 1,
+        }
+        chrome_options.add_experimental_option("prefs", prefs)
+        
+        chrome_options.page_load_strategy = "eager"  # Hızlı yükleme (normal yerine)
+        
+        # Native Selenium Manager dene (Selenium 4.6+ otomatik Chrome driver yönetir)
+        try:
+            driver = webdriver.Chrome(options=chrome_options)
+            driver.set_page_load_timeout(30)  # Sayfa yükleme timeout
+            driver.implicitly_wait(5)  # Element bulma için bekleme
+            print("  ✅ Chrome driver başlatıldı")
+            return driver, temp_profile
+        except Exception as e1:
+            print(f"  ⚠️ Native Chrome başarısız: {type(e1).__name__}")
+        
+        # WebDriver Manager dene (fallback)
+        if CHROME_DRIVER_MANAGER_AVAILABLE:
+            try:
+                driver_path = ChromeDriverManager().install()
+                driver = webdriver.Chrome(
+                    service=Service(driver_path),
+                    options=chrome_options,
+                )
+                driver.set_page_load_timeout(30)  # Sayfa yükleme timeout
+                driver.implicitly_wait(5)  # Element bulma için bekleme
+                print("  ✅ Chrome driver başlatıldı (webdriver-manager)")
+                return driver, temp_profile
+            except Exception as e2:
+                print(f"  ⚠️ Chrome WebDriver Manager başarısız: {type(e2).__name__}")
+        
+        print(f"  ❌ Chrome driver başlatılamadı")
+        return None, None
+    
+    except Exception as e:
+        print(f"  ❌ Hata: {type(e).__name__}")
+        try:
+            shutil.rmtree(temp_profile, ignore_errors=True)
+        except Exception:
+            pass
+        return None, None
+
+
+# =============================================================================
+# 6. MODÜL: KERNELOS BASİT İNDİRİCİ (Toprak Steam Cracker tarzı)
 # =============================================================================
 def download_from_kernelos_selenium(app_id, target_dir):
-    """kernelos.org'dan Headless Selenium ile indirir — optimize edilmiş sürüm."""
+    """
+    kernelos.org/games/ sayfasından dosya indirir — BASİT YAKLAŞIM.
+    
+    Toprak Steam Cracker mantığı:
+    1. Sayfayı aç → AppID gir → Get link → Download butonunu bul
+    2. Download linkini (href) al
+    3. requests ile indir → zip/lua dosyasını kaydet
+    4. Bitir
+    
+    Returns: dosya yolu veya None
+    """
     if not SELENIUM_AVAILABLE:
-        print("❌ Selenium yüklü değil — kernelos Selenium kullanılamaz.")
+        print("❌ Selenium yüklü değil!")
         return None
+    
     os.makedirs(target_dir, exist_ok=True)
-    before_files = set(os.listdir(target_dir))
-
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--disable-images")
-    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.page_load_strategy = "eager"  # DOM hazır olunca devam et (görseller beklenmez)
-
-    prefs = {
-        "download.default_directory": target_dir,
-        "download.prompt_for_download": False,
-    }
-    chrome_options.add_experimental_option("prefs", prefs)
-
-    driver = webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=chrome_options,
-    )
-    wait = WebDriverWait(driver, 15)  # 25 → 15 saniye timeout
-
+    before_files = set(os.listdir(target_dir))  # İndirme öncesi dosyalar
+    driver, temp_profile = _create_chrome_driver(target_dir)
+    if driver is None:
+        return None
+    
     try:
-        driver.get("https://kernelos.org/games/")
-        # time.sleep(3) yerine akıllı bekleme
-        time.sleep(1.5)
-
-        # Input kutusunu bul — optimize edilmiş sıralama
+        # 1. Sayfayı aç (timeout süresini artır)
+        print(f"  🌐 kernelos.org/games/ açılıyor...")
+        try:
+            driver.get("https://kernelos.org/games/")
+            print(f"  ✅ Sayfa yüklendi")
+        except Exception as page_error:
+            print(f"  ⚠️ Sayfa yükleme hatası: {type(page_error).__name__}")
+            # TimeoutException olsa bile devam et, belki DOM hazır
+            if "Timeout" not in str(type(page_error).__name__):
+                return None
+        
+        # Sayfanın tam yüklenmesi için bekle (input alanı görünene kadar)
+        print(f"  ⏳ Sayfa yükleniyor, input alanı bekleniyor...")
         input_box = None
+        
+        # Farklı selector'ları dene
         selectors = [
             "input[type='text']",
             "input[type='number']",
+            "input[placeholder*='AppID' i]",
+            "input[placeholder*='appid' i]",
             "input:not([type='hidden']):not([type='submit']):not([type='button'])",
+            "input",
         ]
-        for sel in selectors:
+        
+        for selector in selectors:
             try:
-                input_box = WebDriverWait(driver, 3).until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, sel))
+                input_box = WebDriverWait(driver, 3).until(  # 5'ten 3'e düşürüldü
+                    EC.presence_of_element_located((By.CSS_SELECTOR, selector))
                 )
+                print(f"  ✅ Input alanı bulundu: {selector}")
                 break
             except Exception:
                 continue
-
+        
         if not input_box:
-            input_box = driver.execute_script("""
-                var inputs = document.querySelectorAll('input');
-                for (var i = 0; i < inputs.length; i++) {
-                    var t = inputs[i].type.toLowerCase();
-                    if (t !== 'hidden' && t !== 'submit' && t !== 'button'
-                        && inputs[i].offsetParent !== null) {
-                        return inputs[i];
-                    }
-                }
-                return null;
-            """)
-
-        if not input_box:
-            print("❌ Sayfada input alanı bulunamadı!")
+            print(f"  ❌ Input alanı bulunamadı! Sayfa yüklenmemiş olabilir.")
             return None
-
+        
+        # 2. AppID'yi input'a yaz
+        
         input_box.clear()
         input_box.send_keys(str(app_id))
-
-        get_link_btn = wait.until(
+        print(f"  ✍️ AppID yazıldı: {app_id}")
+        
+        # 3. "Get link" butonuna tıkla
+        get_link_btn = WebDriverWait(driver, 10).until(  # 20'den 10'a düşürüldü
             EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Get link')]"))
         )
-        get_link_y = get_link_btn.location.get("y", 0)
         driver.execute_script("arguments[0].click();", get_link_btn)
-
-        # time.sleep(3) yerine akıllı bekleme — download linki çıkana kadar bekle
-        time.sleep(1.5)
+        print(f"  🔗 'Get link' butonuna tıklandı...")
         
-        # Download linkinin oluşmasını bekle (max 8 saniye)
-        for _ in range(16):
-            result = driver.execute_script("""
-                var glY = arguments[0];
-                var els = document.querySelectorAll('a, button');
-                for (var i = 0; i < els.length; i++) {
-                    var el = els[i];
-                    var txt = (el.textContent || '').toLowerCase();
-                    var rect = el.getBoundingClientRect();
-                    var absY = rect.top + window.scrollY;
-                    if (absY <= glY + 10) continue;
-                    if (txt.indexOf('download') !== -1
-                        || txt.indexOf('open link') !== -1) {
-                        return {idx: i, href: el.href || null};
-                    }
-                }
-                return null;
-            """, get_link_y)
-            
-            if result:
+        # 4. "Ready..." mesajını bekle (hızlandırıldı)
+        time.sleep(1)  # 2'den 1'e düşürüldü
+        for _ in range(10):  # 20'den 10'a düşürüldü
+            if "ready" in driver.page_source.lower():
                 break
-            time.sleep(0.5)
-
-        if result:
-            if result["href"]:
+            time.sleep(0.3)  # 0.5'ten 0.3'e düşürüldü
+        
+        # 5. EN ALTTAKİ "Download" veya "Open link" butonunu bul
+        time.sleep(1)  # 3'ten 1'e düşürüldü
+        download_btn = None
+        open_link_btn = None
+        download_href = None
+        
+        print(f"  🔍 Open link/Download butonu aranıyor...")
+        for _ in range(15):  # 20'den 15'e düşürüldü
+            # Tüm butonları ve linkleri bul
+            all_elements = driver.find_elements(By.CSS_SELECTOR, "button, a")
+            
+            # "Download" ve "Open link" butonlarını bul
+            download_candidates = []
+            open_link_candidates = []
+            
+            for el in all_elements:
+                try:
+                    text = (el.text or "").strip().lower()
+                    y_pos = el.location.get("y", 0) + el.size.get("height", 0)
+                    # href'i bul (attribute veya onclick'ten)
+                    href = el.get_attribute("href")
+                    if not href:
+                        # onclick'ten href çıkar
+                        onclick = el.get_attribute("onclick") or ""
+                        if "window.open" in onclick or "location.href" in onclick:
+                            import re
+                            match = re.search(r"['\"](https?://[^'\"]+)['\"]", onclick)
+                            if match:
+                                href = match.group(1)
+                    
+                    # Download butonu
+                    if "download" in text and "open link" not in text and "get link" not in text:
+                        download_candidates.append((y_pos, el, href))
+                    # Open link butonu
+                    elif "open link" in text:
+                        open_link_candidates.append((y_pos, el, href))
+                except Exception:
+                    continue
+            
+            # Open link butonunu öncelikle seç (daha güvenilir)
+            if open_link_candidates:
+                open_link_candidates.sort(key=lambda x: x[0], reverse=True)
+                open_link_btn = open_link_candidates[0][1]
+                download_href = open_link_candidates[0][2]
+                print(f"  ✅ Open link butonu bulundu (href: {'var' if download_href else 'yok'})")
+                download_btn = open_link_btn  # Aynı değişkeni kullan
+                break
+            # Open link yoksa Download butonunu kullan
+            elif download_candidates:
+                download_candidates.sort(key=lambda x: x[0], reverse=True)
+                download_btn = download_candidates[0][1]
+                download_href = download_candidates[0][2]
+                print(f"  ✅ Download butonu bulundu (href: {'var' if download_href else 'yok'})")
+                break
+            
+            time.sleep(0.3)  # 0.5'ten 0.3'e düşürüldü
+        
+        if not download_btn:
+            print("  ❌ Download/Open link butonu bulunamadı!")
+            return None
+        
+        # 6. İndirme yöntemi: href varsa requests, yoksa tarayıcı indirmesi
+        # href varsa ve gerçek bir dosya linkiyse requests ile indir
+        # Anchor link kontrolü: #downloads, # gibi linkler gerçek dosya değil
+        if download_href and download_href.startswith("http"):
+            # Anchor link kontrolü (kernelos.org/#downloads gibi)
+            if "#" in download_href and not download_href.endswith((".zip", ".lua")):
+                # Anchor link, tarayıcı indirmesini kullan
+                print(f"  ⚠️ Anchor link tespit edildi, tarayıcı indirmesine geçiliyor...")
+                download_href = None
+            else:
+                print(f"  📥 Download linki bulundu, requests ile indiriliyor...")
                 session = requests.Session()
+                
+                # Cookie'leri aktar
                 for cookie in driver.get_cookies():
                     session.cookies.set(cookie["name"], cookie["value"])
-                res = session.get(result["href"], stream=True)
-                ct = res.headers.get("Content-Type", "")
-                ext = ".zip" if "zip" in ct else ".lua"
-                fp = os.path.join(target_dir, f"{app_id}{ext}")
-                with open(fp, "wb") as f:
-                    for chunk in res.iter_content(chunk_size=8192):
-                        f.write(chunk)
-                if _validate_downloaded_file(fp):
-                    return fp
-                os.remove(fp)
-                print("  ⚠️ Selenium indirmesi geçersiz dosya döndü (Cloudflare?).")
-            else:
-                all_els = driver.find_elements(By.CSS_SELECTOR, "a, button")
-                driver.execute_script(
-                    "arguments[0].click();", all_els[result["idx"]]
-                )
-                for _ in range(15):
-                    time.sleep(1)
-                    new_files = set(os.listdir(target_dir)) - before_files
-                    for f in new_files:
-                        if not f.endswith((".tmp", ".crdownload")):
-                            return os.path.join(target_dir, f)
+                
+                # Cloudflare bypass için header'lar
+                headers = {
+                    'User-Agent': driver.execute_script("return navigator.userAgent;"),
+                    'Referer': 'https://kernelos.org/games/',
+                    'Accept': 'application/octet-stream, application/zip, */*',
+                }
+                
+                try:
+                    res = session.get(download_href, stream=True, timeout=30, headers=headers)
+                    res.raise_for_status()
+                    
+                    # Content-Type kontrolü
+                    ct = res.headers.get("Content-Type", "").lower()
+                    content_length = res.headers.get("Content-Length", "0")
+                    print(f"  📊 Content-Type: {ct}, Size: {content_length} bytes")
+                    
+                    # HTML değilse indir
+                    if "text/html" not in ct:
+                        # Dosya uzantısını belirle
+                        ext = ".zip" if "zip" in ct or "application/zip" in ct else ".lua"
+                        fp = os.path.join(target_dir, f"{app_id}{ext}")
+                        
+                        # Dosyayı kaydet
+                        with open(fp, "wb") as f:
+                            for chunk in res.iter_content(chunk_size=8192):
+                                if chunk:
+                                    f.write(chunk)
+                        
+                        file_size = os.path.getsize(fp)
+                        print(f"  💾 Dosya kaydedildi: {os.path.basename(fp)} ({file_size:,} bytes)")
+                        
+                        # Dosyayı doğrula
+                        if _validate_downloaded_file(fp):
+                            print(f"  ✅ Dosya geçerli: {os.path.basename(fp)}")
+                            return fp
+                        else:
+                            os.remove(fp)
+                            print("  ❌ İndirilen dosya geçersiz, tarayıcı indirmesine geçiliyor...")
+                            download_href = None
+                    else:
+                        print("  ⚠️ Link HTML sayfasına yönlendiriyor, tarayıcı indirmesine geçiliyor...")
+                        download_href = None
+                except Exception as e:
+                    print(f"  ⚠️ requests ile indirme başarısız: {type(e).__name__}, tarayıcı indirmesine geçiliyor...")
+                    download_href = None
+        
+        # href yoksa veya başarısız olduysa, butona tıkla ve tarayıcı indirmesini bekle
+        if not download_href:
+            print(f"  🖱️ Butona tıklanıyor (tarayıcı indirmesi)...")
+            try:
+                # Butona tıkla
+                driver.execute_script("arguments[0].click();", download_btn)
+                time.sleep(1)  # 2'den 1'e düşürüldü
+                
+                # İndirmenin tamamlanmasını bekle (max 60 saniye)
+                download_started = False
+                for i in range(60):
+                    time.sleep(0.5)  # 1'den 0.5'e düşürüldü (2x daha hızlı kontrol)
+                    current_files = set(os.listdir(target_dir))
+                    new_files = current_files - before_files
+                    
+                    # İndirme devam ediyor mu kontrol et (.crdownload, .tmp)
+                    downloading = [f for f in new_files if f.endswith((".crdownload", ".tmp", ".part"))]
+                    if downloading:
+                        download_started = True
+                        if i % 10 == 0:  # Her 5 saniyede bir log (0.5s * 10 = 5s)
+                            print(f"  ⏳ İndirme devam ediyor... ({i*0.5:.0f}s)")
+                        continue
+                    
+                    # Tamamlanmış dosyaları kontrol et
+                    completed = [f for f in new_files if not f.endswith((".tmp", ".crdownload", ".part"))]
+                    for f in completed:
+                        fpath = os.path.join(target_dir, f)
+                        try:
+                            file_size = os.path.getsize(fpath)
+                            print(f"  💾 İndirilen: {f} ({file_size:,} bytes)")
+                            
+                            # Dosya doğrulaması (boyut kontrolü yok, sadece içerik kontrolü)
+                            if _validate_downloaded_file(fpath):
+                                print(f"  ✅ Dosya geçerli: {f}")
+                                return fpath
+                            else:
+                                print(f"  ⚠️ Dosya geçersiz (HTML/Cloudflare?), siliniyor...")
+                                os.remove(fpath)
+                        except Exception as e:
+                            print(f"  ⚠️ Dosya kontrolü hatası: {type(e).__name__}")
+                            continue
+                    
+                    # İndirme başladıysa ve tamamlandıysa çık
+                    if download_started and not downloading and completed:
+                        break
+                
+                if not download_started:
+                    print("  ❌ İndirme başlamadı! Buton çalışmıyor olabilir.")
+                else:
+                    print("  ❌ İndirme zaman aşımına uğradı!")
+                return None
+            except Exception as e:
+                print(f"  ❌ Tarayıcı indirmesi başarısız: {type(e).__name__}: {e}")
+                return None
+    
+    except Exception as e:
+        print(f"  ❌ Hata: {type(e).__name__}: {e}")
+        return None
+    
     finally:
-        driver.quit()
+        try:
+            if driver:
+                driver.quit()
+        except Exception:
+            pass
+        time.sleep(0.3)
+        if temp_profile:
+            try:
+                shutil.rmtree(temp_profile, ignore_errors=True)
+            except Exception:
+                pass
+        _kill_zombie_chrome()
+    
     return None
 
 
 # =============================================================================
-# 5. MODÜL: DOSYA YERLEŞTİRME (Toprak Steam Cracker mantığı — kernelos fallback)
+# 7. MODÜL: DOSYA YERLEŞTİRME (Toprak Steam Cracker mantığı)
 # =============================================================================
 def place_game_files(file_path, app_id):
     """
@@ -359,29 +529,54 @@ def place_game_files(file_path, app_id):
         with zipfile.ZipFile(file_path, "r") as z:
             for name in z.namelist():
                 lower = name.lower()
+                base_name = os.path.basename(name)
                 
-                # Lua dosyalarını stplug-in dizinine koy
+                # Lua dosyalarını stplug-in dizinine koy (SADECE AppID ile eşleşen)
                 if lower.endswith(".lua"):
-                    z.extract(name, TARGET_DOWNLOAD_DIR)
-                    extracted = os.path.join(TARGET_DOWNLOAD_DIR, name)
-                    # Cloudflare HTML koruması kontrolü!
-                    if not _validate_downloaded_file(extracted):
-                        print(f"  ⚠️ ATLANIDI: {os.path.basename(name)} geçersiz (HTML/Cloudflare)")
-                        os.remove(extracted)
-                        continue
-                    dest = os.path.join(STPLUGIN_DIR, os.path.basename(name))
-                    shutil.copy2(extracted, dest)
-                    lua_placed = True
-                    print(f"  ✅ Lua → stplug-in/{os.path.basename(name)}")
+                    # Dosya adı AppID ile eşleşmeli (örn: 3834090.lua)
+                    # Veya README hariç tüm .lua dosyaları (eğer AppID eşleşmiyorsa)
+                    expected_lua_name = f"{app_id}.lua"
+                    
+                    # Lua dosyalarını kullan (README hariç)
+                    if base_name.endswith(".lua") and "readme" not in lower:
+                        z.extract(name, TARGET_DOWNLOAD_DIR)
+                        extracted = os.path.join(TARGET_DOWNLOAD_DIR, name)
+                        # Cloudflare HTML koruması kontrolü!
+                        if not _validate_downloaded_file(extracted):
+                            print(f"  ⚠️ ATLANIDI: {base_name} geçersiz (HTML/Cloudflare)")
+                            os.remove(extracted)
+                            continue
+                        
+                        # Dosyayı olduğu gibi kopyala (yeniden adlandırma yok)
+                        dest = os.path.join(STPLUGIN_DIR, base_name)
+                        shutil.copy2(extracted, dest)
+                        lua_placed = True
+                        print(f"  ✅ Lua → stplug-in/{base_name}")
+                        
+                        # Geçici dosyayı sil
+                        try:
+                            os.remove(extracted)
+                        except Exception:
+                            pass
                 
                 # Manifest dosyalarını depotcache dizinine koy
                 elif lower.endswith(".manifest"):
                     z.extract(name, TARGET_DOWNLOAD_DIR)
                     extracted = os.path.join(TARGET_DOWNLOAD_DIR, name)
-                    dest = os.path.join(DEPOTCACHE_DIR, os.path.basename(name))
+                    dest = os.path.join(DEPOTCACHE_DIR, base_name)
                     shutil.copy2(extracted, dest)
                     manifest_count += 1
-                    print(f"  ✅ Manifest → depotcache/{os.path.basename(name)}")
+                    print(f"  ✅ Manifest → depotcache/{base_name}")
+                    
+                    # Geçici dosyayı sil
+                    try:
+                        os.remove(extracted)
+                    except Exception:
+                        pass
+                
+                # README dosyalarını atla (gerekli değil)
+                elif "readme" in lower:
+                    print(f"  ℹ️ README atlandı: {base_name}")
     
     elif file_path.endswith(".lua"):
         # Tek lua dosyası — Cloudflare kontrolü yap!
@@ -393,23 +588,11 @@ def place_game_files(file_path, app_id):
         lua_placed = True
         print(f"  ✅ Lua → stplug-in/{app_id}.lua")
     
-    # Eski hatalı add_license formatındaki dosyaları temizle
-    old_config_lua = os.path.join(STEAM_PATH, "config", f"{app_id}.lua")
-    if os.path.isfile(old_config_lua):
-        try:
-            with open(old_config_lua, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            if "add_license(" in content:
-                os.remove(old_config_lua)
-                print(f"  🧹 Eski hatalı config/{app_id}.lua silindi (add_license formatı)")
-        except Exception:
-            pass
-    
     return lua_placed, manifest_count
 
 
 # =============================================================================
-# 6. MODÜL: ANA AKIŞ (Önce Lokal Lua → Fallback Kernelos)
+# 8. MODÜL: ANA AKIŞ (kernelos.org → dosya dağıtımı → Steam restart)
 # =============================================================================
 def restart_steam():
     """Steam'i kapatıp yeniden başlatır."""
@@ -442,8 +625,8 @@ def add_shortcut_from_manifest(app_id, app_name, on_progress=None):
     Oyunu Steam kütüphanesine ekler.
     
     AKIŞ:
-    1. KERNELOS.ORG (Headless Chrome) — Depot anahtarları + manifest dahil tam veri
-    2. FALLBACK: LOKAL LUA — Kernelos başarısız olursa basit addappid() oluşturur
+    1. kernelos.org'dan Selenium ile lua/zip indir
+    2. Dosyaları doğru dizinlere dağıt (stplug-in + depotcache)
     3. Steam'i yeniden başlat
     
     on_progress: callable(pct: float, msg: str) — UI progress güncellemesi (opsiyonel)
@@ -460,51 +643,52 @@ def add_shortcut_from_manifest(app_id, app_name, on_progress=None):
     else:
         print(f"✅ {system_msg}")
     
+    if not SELENIUM_AVAILABLE:
+        return False, (
+            "Selenium yüklü değil!\n"
+            "Lütfen şu komutu çalıştır:\n"
+            "pip install selenium webdriver-manager"
+        )
+    
     lua_ok = False
     manifest_count = 0
-    method_used = ""
     file_path = None
     
     # ═══════════════════════════════════════════
-    # YÖNTEM 1: KERNELOS SELENIUM (~8-15 saniye)
+    # KERNELOS.ORG İNDİRME (Selenium, max 60sn timeout)
     # ═══════════════════════════════════════════
-    if SELENIUM_AVAILABLE:
-        _prog(0.10, "kernelos.org'dan indiriliyor...")
-        print(f"\n📥 Kernelos Selenium ile indiriliyor...")
-        try:
-            file_path = download_from_kernelos_selenium(app_id, TARGET_DOWNLOAD_DIR)
-        except Exception as e:
-            print(f"⚠️ Selenium hatası (fallback'e geçiliyor): {type(e).__name__}")
-            file_path = None
-        
-        if file_path:
-            _prog(0.55, "Dosyalar yerleştiriliyor...")
-            print(f"📦 İndirilen: {os.path.basename(file_path)}")
-            lua_ok, manifest_count = place_game_files(file_path, app_id)
-            if lua_ok:
-                method_used = "Kernelos (depot anahtarları dahil)"
-    else:
-        print("⚠️ Selenium yüklü değil, lokal lua oluşturulacak.")
+    _prog(0.10, "kernelos.org'dan indiriliyor...")
+    print(f"\n📥 Kernelos Selenium ile indiriliyor...")
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(download_from_kernelos_selenium, app_id, TARGET_DOWNLOAD_DIR)
+            file_path = future.result(timeout=60)
+    except concurrent.futures.TimeoutError:
+        print(f"⏰ Selenium 60sn timeout! kernelos.org'dan indirme zaman aşımına uğradı.")
+        _kill_zombie_chrome()
+        file_path = None
+    except Exception as e:
+        print(f"⚠️ Selenium hatası: {type(e).__name__}: {e}")
+        _kill_zombie_chrome()
+        file_path = None
     
-    # ═══════════════════════════════════════════
-    # YÖNTEM 2: LOKAL LUA FALLBACK (~0.1 saniye)
-    # ═══════════════════════════════════════════
-    if not lua_ok:
-        _prog(0.50, "Lokal lua oluşturuluyor...")
-        print(f"\n🔧 Lokal lua oluşturuluyor (fallback)...")
-        lua_path, dlc_count = generate_local_lua(app_id)
-        
-        if lua_path:
-            lua_ok = True
-            method_used = "Lokal Lua (depot anahtarları YOK)"
-            print(f"✅ Lokal lua oluşturuldu ({dlc_count} DLC dahil)")
-            print("⚠️ Not: Depot şifre anahtarları eksik — bazı oyunlar başlamayabilir.")
+    if file_path:
+        _prog(0.55, "Dosyalar yerleştiriliyor...")
+        print(f"📦 İndirilen: {os.path.basename(file_path)}")
+        lua_ok, manifest_count = place_game_files(file_path, app_id)
     
     if not lua_ok:
-        return False, "Hiçbir yöntem başarılı olmadı! kernelos erişilemez ve lokal oluşturma başarısız."
+        return False, (
+            "kernelos.org'dan indirme başarısız!\n\n"
+            "Olası sebepler:\n"
+            "• Chrome açıkken çakışma (Chrome'u kapat ve tekrar dene)\n"
+            "• kernelos.org geçici olarak erişilemez\n"
+            "• Ağ bağlantı sorunu\n\n"
+            "Çözüm: Chrome'u kapat, birkaç dakika bekle ve tekrar dene."
+        )
     
     _prog(0.65, "Temizlik yapılıyor...")
-    print(f"\n📊 Sonuç: Lua ✅ | Yöntem: {method_used} | Manifest: {manifest_count}")
+    print(f"\n📊 Sonuç: Lua ✅ | Yöntem: Kernelos | Manifest: {manifest_count}")
     
     # Eski hatalı ACF manifest varsa temizle
     old_acf = os.path.join(STEAM_PATH, "steamapps", f"appmanifest_{app_id}.acf")
@@ -526,7 +710,7 @@ def add_shortcut_from_manifest(app_id, app_name, on_progress=None):
     if system_ok:
         return True, (
             f"'{app_name}' (AppID: {app_id}) başarıyla eklendi!\n"
-            f"Yöntem: {method_used}\n"
+            f"Yöntem: Kernelos\n"
             f"Lua: stplug-in/{app_id}.lua ✅\n"
             f"Manifest: {manifest_count} dosya\n\n"
             f"Steam kütüphanenizi kontrol edin."
@@ -541,7 +725,7 @@ def add_shortcut_from_manifest(app_id, app_name, on_progress=None):
 
 
 # =============================================================================
-# 7. MODÜL: OYUN YÖNETİMİ (Listeleme, Güncelleme, Kaldırma)
+# 9. MODÜL: OYUN YÖNETİMİ (Listeleme, Güncelleme, Kaldırma)
 # =============================================================================
 def get_game_name_from_steam(app_id):
     """Steam Store API'den oyun adını çeker."""
@@ -568,6 +752,7 @@ def list_added_games():
         [{"app_id": "123456", "name": "Game Name", "lua_file": "path",
           "lua_size": 1234, "manifest_count": 2, "has_depot_keys": True}, ...]
     """
+    import glob
     games = []
     if not os.path.isdir(STPLUGIN_DIR):
         return games
@@ -666,6 +851,9 @@ def update_game(app_id):
     app_id = str(app_id)
     print(f"🔄 AppID {app_id} güncelleniyor...")
 
+    if not SELENIUM_AVAILABLE:
+        return False, "Selenium yüklü değil! pip install selenium webdriver-manager"
+
     # Eski lua'yı sil (yeni indirilecek)
     old_lua = os.path.join(STPLUGIN_DIR, f"{app_id}.lua")
     if os.path.isfile(old_lua):
@@ -673,31 +861,32 @@ def update_game(app_id):
         print(f"  🧹 Eski lua silindi.")
 
     lua_ok = False
-    method_used = ""
+    file_path = None
 
-    # Yöntem 1: Kernelos Selenium
-    if SELENIUM_AVAILABLE:
-        print(f"\n📥 Kernelos Selenium ile indiriliyor...")
-        try:
-            file_path = download_from_kernelos_selenium(app_id, TARGET_DOWNLOAD_DIR)
-        except Exception as e:
-            print(f"⚠️ Selenium hatası: {type(e).__name__}")
-            file_path = None
-        if file_path:
-            lua_ok, _ = place_game_files(file_path, app_id)
-            if lua_ok:
-                method_used = "Kernelos (depot anahtarlı)"
-
-    # Yöntem 2: Lokal fallback
-    if not lua_ok:
-        print(f"\n🔧 Lokal lua fallback...")
-        lua_path, dlc_count = generate_local_lua(app_id)
-        if lua_path:
-            lua_ok = True
-            method_used = "Lokal (depot anahtarsız)"
+    # Kernelos Selenium ile güncelle (60sn timeout)
+    print(f"\n📥 Kernelos Selenium ile indiriliyor...")
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(download_from_kernelos_selenium, app_id, TARGET_DOWNLOAD_DIR)
+            file_path = future.result(timeout=60)
+    except concurrent.futures.TimeoutError:
+        print(f"⏰ Selenium 60sn timeout!")
+        _kill_zombie_chrome()
+        file_path = None
+    except Exception as e:
+        print(f"⚠️ Selenium hatası: {type(e).__name__}")
+        _kill_zombie_chrome()
+        file_path = None
+    
+    if file_path:
+        lua_ok, _ = place_game_files(file_path, app_id)
 
     if lua_ok:
-        print(f"✅ Güncelleme tamamlandı! Yöntem: {method_used}")
-        return True, f"AppID {app_id} güncellendi.\nYöntem: {method_used}"
+        print(f"✅ Güncelleme tamamlandı!")
+        return True, f"AppID {app_id} güncellendi.\nYöntem: Kernelos"
     else:
-        return False, f"AppID {app_id} güncellenemedi!"
+        return False, (
+            f"AppID {app_id} güncellenemedi!\n"
+            "kernelos.org'dan indirme başarısız.\n"
+            "Chrome'u kapat ve tekrar dene."
+        )
