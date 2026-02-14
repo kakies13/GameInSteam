@@ -29,11 +29,30 @@ pyinstaller ^
     --hidden-import=selenium.webdriver.support.expected_conditions ^
     --hidden-import=webdriver_manager ^
     --hidden-import=webdriver_manager.chrome ^
+    --hidden-import=webdriver_manager.drivers.chrome ^
     --hidden-import=certifi ^
     --hidden-import=urllib3 ^
     --hidden-import=charset_normalizer ^
+    --hidden-import=winreg ^
+    --hidden-import=concurrent.futures ^
+    --hidden-import=zipfile ^
+    --hidden-import=json ^
+    --hidden-import=vdf ^
+    --hidden-import=tkinter ^
+    --hidden-import=tkinter.ttk ^
+    --hidden-import=tkinter.messagebox ^
+    --hidden-import=tkinter.filedialog ^
+    --hidden-import=customtkinter ^
+    --hidden-import=threading ^
+    --hidden-import=queue ^
     --collect-all selenium ^
     --collect-all webdriver_manager ^
+    --collect-all certifi ^
+    --collect-all charset_normalizer ^
+    --collect-all PIL ^
+    --collect-binaries all ^
+    --noupx ^
+    --clean ^
     main.py
 
 if %ERRORLEVEL% NEQ 0 (

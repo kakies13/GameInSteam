@@ -28,6 +28,9 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
+ArchitecturesAllowed=x64
+ArchitecturesInstallIn64BitMode=x64
+MinVersion=10.0
 
 ; Güzel görünüm
 WizardSizePercent=110
@@ -73,12 +76,57 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 Type: filesandordirs; Name: "{app}\*"
 
 [Code]
+// Visual C++ Redistributables kontrolü
+function IsVCRedistInstalled(): Boolean;
+var
+  Version: String;
+begin
+  Result := False;
+  // Visual C++ 2015-2022 Redistributables kontrolü
+  if RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Version', Version) then
+  begin
+    Result := True;
+    Exit;
+  end;
+  // Alternatif kontrol
+  if RegQueryStringValue(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Version', Version) then
+  begin
+    Result := True;
+    Exit;
+  end;
+  // 2015-2022 Redistributables kontrolü
+  if RegKeyExists(HKLM, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64') then
+  begin
+    Result := True;
+    Exit;
+  end;
+end;
+
 // Kurulum sırasında kontroller
 function InitializeSetup(): Boolean;
 var
   SteamDir: String;
+  VCRedistMissing: Boolean;
 begin
   Result := True;
+
+  // Visual C++ Redistributables kontrolü
+  VCRedistMissing := not IsVCRedistInstalled();
+  if VCRedistMissing then
+  begin
+    if MsgBox('Visual C++ Redistributables not detected.' + #13#10#13#10 +
+              'GameInSteam requires Visual C++ Redistributables to run.' + #13#10#13#10 +
+              'You can:' + #13#10 +
+              '1. Continue installation and install VC++ Redistributables manually later' + #13#10 +
+              '2. Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe' + #13#10#13#10 +
+              'Do you want to continue with the installation?' + #13#10 +
+              '(Click Yes to continue, or No to cancel and install VC++ Redistributables first)',
+              mbConfirmation, MB_YESNO) = IDNO then
+    begin
+      Result := False;
+      Exit;
+    end;
+  end;
 
   // Eski versiyon kontrolü
   if RegKeyExists(HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1') then
