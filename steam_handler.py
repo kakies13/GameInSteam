@@ -44,6 +44,49 @@ STEAM_API_URL = "https://store.steampowered.com/api/appdetails"
 # =============================================================================
 # 1. MODÜL: SİSTEM KONTROLÜ
 # =============================================================================
+def check_chrome_installed():
+    """
+    Google Chrome'un yüklü olup olmadığını kontrol eder.
+    Returns: (is_installed: bool, chrome_path: str or None, error_message: str or None)
+    """
+    chrome_paths = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    ]
+    
+    # Registry kontrolü (Windows)
+    try:
+        import winreg
+        reg_paths = [
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Google\Chrome\BLBeacon"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Google\Chrome\BLBeacon"),
+            (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Google\Chrome\BLBeacon"),
+        ]
+        
+        for hkey, path in reg_paths:
+            try:
+                key = winreg.OpenKey(hkey, path)
+                version = winreg.QueryValueEx(key, "version")[0]
+                winreg.CloseKey(key)
+                # Registry'de bulundu, dosya yolunu kontrol et
+                for chrome_path in chrome_paths:
+                    if os.path.isfile(chrome_path):
+                        return True, chrome_path, None
+            except (FileNotFoundError, OSError):
+                continue
+    except ImportError:
+        # winreg modülü yok (nadir durum - Windows dışı sistem)
+        pass
+    except Exception:
+        pass
+    
+    # Dosya yolu kontrolü
+    for chrome_path in chrome_paths:
+        if os.path.isfile(chrome_path):
+            return True, chrome_path, None
+    
+    return False, None, "Google Chrome yüklü değil. Lütfen Chrome'u indirip kurun: https://www.google.com/chrome/"
+
 def check_stplugin_system():
     """
     stplug-in sisteminin kurulu olup olmadığını kontrol eder.
@@ -663,6 +706,22 @@ def add_shortcut_from_manifest(app_id, app_name, on_progress=None):
             "pip install selenium webdriver-manager"
         )
     
+    # Chrome kontrolü (indirme öncesi)
+    _prog(0.08, "Chrome kontrol ediliyor...")
+    chrome_installed, chrome_path, chrome_error = check_chrome_installed()
+    if not chrome_installed:
+        return False, (
+            "Google Chrome bulunamadı!\n\n"
+            f"{chrome_error}\n\n"
+            "GameInSteam, oyun dosyalarını indirmek için Chrome'a ihtiyaç duyar.\n\n"
+            "Çözüm:\n"
+            "1. Google Chrome'u indir: https://www.google.com/chrome/\n"
+            "2. Chrome'u kur ve başlat\n"
+            "3. GameInSteam'i tekrar çalıştır\n"
+            "4. Oyun eklemeyi tekrar dene"
+        )
+    print(f"✅ Chrome bulundu: {chrome_path}")
+    
     lua_ok = False
     manifest_count = 0
     file_path = None
@@ -690,14 +749,16 @@ def add_shortcut_from_manifest(app_id, app_name, on_progress=None):
         return False, (
             "Chrome driver başlatılamadı!\n\n"
             "Olası sebepler:\n"
-            "• Google Chrome yüklü değil\n"
-            "• Chrome güncel değil\n"
-            "• Chrome erişilemiyor\n\n"
+            "• Chrome driver indirilemedi\n"
+            "• Chrome sürümü uyumsuz\n"
+            "• İnternet bağlantısı yok (driver indirme için gerekli)\n"
+            "• Antivirus/firewall engelliyor\n\n"
             "Çözüm:\n"
-            "1. Google Chrome'u indirip kur: https://www.google.com/chrome/\n"
-            "2. Chrome'u güncelle\n"
-            "3. Bilgisayarı yeniden başlat\n"
-            "4. Tekrar dene"
+            "1. İnternet bağlantınızı kontrol edin\n"
+            "2. Chrome'u güncelleyin (Chrome menü → Yardım → Google Chrome Hakkında)\n"
+            "3. Antivirus/firewall'u geçici olarak kapatıp tekrar deneyin\n"
+            "4. Bilgisayarı yeniden başlatın\n"
+            "5. GameInSteam'i yönetici olarak çalıştırın"
         )
     
     if file_path:
@@ -706,15 +767,37 @@ def add_shortcut_from_manifest(app_id, app_name, on_progress=None):
         lua_ok, manifest_count = place_game_files(file_path, app_id)
     
     if not lua_ok:
-        return False, (
-            "kernelos.org'dan indirme başarısız!\n\n"
-            "Olası sebepler:\n"
-            "• kernelos.org geçici olarak erişilemez\n"
-            "• Ağ bağlantı sorunu\n"
-            "• İnternet bağlantısı yok\n"
-            "• Oyun dosyaları bulunamadı\n\n"
-            "Çözüm: Birkaç dakika bekle ve tekrar dene."
-        )
+        # file_path None ise indirme başarısız oldu
+        if file_path is None:
+            return False, (
+                f"{app_id}: kernelos.org'dan indirme başarısız!\n\n"
+                "Olası sebepler:\n"
+                "• kernelos.org geçici olarak erişilemez\n"
+                "• Ağ bağlantı sorunu\n"
+                "• İnternet bağlantısı yok\n"
+                "• Oyun dosyaları bulunamadı\n"
+                "• Chrome driver başlatılamadı\n"
+                "• Sayfa yükleme zaman aşımı\n\n"
+                "Çözüm:\n"
+                "1. İnternet bağlantınızı kontrol edin\n"
+                "2. Birkaç dakika bekleyip tekrar deneyin\n"
+                "3. Chrome'un güncel olduğundan emin olun\n"
+                "4. Farklı bir App ID deneyin\n"
+                "5. GameInSteam'i yönetici olarak çalıştırın"
+            )
+        else:
+            # Dosya indirildi ama geçersiz
+            return False, (
+                f"{app_id}: İndirilen dosya geçersiz!\n\n"
+                "Olası sebepler:\n"
+                "• Cloudflare koruması HTML sayfası döndü\n"
+                "• Dosya bozuk veya eksik\n"
+                "• Yanlış dosya türü indirildi\n\n"
+                "Çözüm:\n"
+                "1. Birkaç dakika bekleyip tekrar deneyin\n"
+                "2. Farklı bir App ID deneyin\n"
+                "3. İnternet bağlantınızı kontrol edin"
+            )
     
     _prog(0.65, "Temizlik yapılıyor...")
     print(f"\n📊 Sonuç: Lua ✅ | Yöntem: Kernelos | Manifest: {manifest_count}")
