@@ -3,7 +3,7 @@
 **Steam Library Manager** — Add any game to your Steam library with one click.
 
 ![Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-blue?logo=windows)
-![Version](https://img.shields.io/badge/Version-2.7-green)
+![Version](https://img.shields.io/badge/Version-2.8-green)
 
 ---
 
@@ -28,7 +28,7 @@
 ## 📥 Download & Install
 
 ### Option 1: Installer (Recommended)
-1. Download **`GameInSteam_Setup_v2.7.exe`** from [Releases](../../releases/latest)
+1. Download **`GameInSteam_Setup_v2.8.exe`** from [Releases](../../releases/latest)
 2. Run the installer → **Next → Next → Install → Finish**
 3. The installer automatically:
    - ✅ Installs GameInSteam

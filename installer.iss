@@ -5,7 +5,7 @@
 ; Derleme: ISCC.exe installer.iss  veya  build.bat
 
 #define MyAppName "GameInSteam"
-#define MyAppVersion "2.7"
+#define MyAppVersion "2.8"
 #define MyAppPublisher "GameInSteam"
 #define MyAppURL "https://gameinsteam.com"
 #define MyAppExeName "GameInSteam.exe"
@@ -28,8 +28,8 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 
 ; Güzel görünüm
