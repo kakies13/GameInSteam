@@ -13,8 +13,8 @@ env/
 # Build Artifacts
 build/
 dist/
-Output/
 *.spec
+# Output/ klasörü public repoda görünür (installer için)
 
 # IDE
 .idea/
