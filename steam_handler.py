@@ -95,10 +95,23 @@ def _validate_downloaded_file(file_path):
     İndirilen dosyanın gerçekten lua/zip olup olmadığını doğrular.
     Cloudflare bazen HTML challenge sayfası döner — bunu yakalar.
     Bozuk dosya stplug-in'e yerleştirilirse Steam çöker!
+    
+    Minimum boyut: 100 KB (çok küçük dosyalar muhtemelen geçersiz)
+    Maksimum boyut: 5 MB (çok büyük dosyalar muhtemelen hatalı)
     """
     try:
         size = os.path.getsize(file_path)
-        if size < 50:
+        
+        # Çok küçük dosyalar (100 KB'dan küçük) muhtemelen geçersiz
+        MIN_SIZE = 100 * 1024  # 100 KB
+        if size < MIN_SIZE:
+            print(f"  ⚠️ Dosya çok küçük ({size:,} bytes < {MIN_SIZE:,} bytes), geçersiz olabilir")
+            return False
+        
+        # Çok büyük dosyalar (5 MB'dan büyük) muhtemelen hatalı
+        MAX_SIZE = 5 * 1024 * 1024  # 5 MB
+        if size > MAX_SIZE:
+            print(f"  ⚠️ Dosya çok büyük ({size:,} bytes > {MAX_SIZE:,} bytes), hatalı olabilir")
             return False
         
         with open(file_path, "rb") as f:
@@ -415,8 +428,19 @@ def download_from_kernelos_selenium(app_id, target_dir):
                     
                     # Content-Type kontrolü
                     ct = res.headers.get("Content-Type", "").lower()
-                    content_length = res.headers.get("Content-Length", "0")
-                    print(f"  📊 Content-Type: {ct}, Size: {content_length} bytes")
+                    content_length = int(res.headers.get("Content-Length", "0") or "0")
+                    print(f"  📊 Content-Type: {ct}, Size: {content_length:,} bytes")
+                    
+                    # Dosya boyutu kontrolü (Content-Length'ten)
+                    MIN_SIZE = 100 * 1024  # 100 KB minimum
+                    MAX_SIZE = 5 * 1024 * 1024  # 5 MB maksimum
+                    if content_length > 0:
+                        if content_length < MIN_SIZE:
+                            print(f"  ⚠️ Dosya çok küçük ({content_length:,} bytes < {MIN_SIZE:,} bytes), atlanıyor...")
+                            return None
+                        if content_length > MAX_SIZE:
+                            print(f"  ⚠️ Dosya çok büyük ({content_length:,} bytes > {MAX_SIZE:,} bytes), atlanıyor...")
+                            return None
                     
                     # HTML değilse indir
                     if "text/html" not in ct:
