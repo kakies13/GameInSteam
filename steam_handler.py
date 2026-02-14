@@ -332,19 +332,17 @@ def download_from_kernelos_selenium(app_id, target_dir):
                 break
             time.sleep(0.3)  # 0.5'ten 0.3'e düşürüldü
         
-        # 5. EN ALTTAKİ "Download" veya "Open link" butonunu bul
+        # 5. "Get link" butonunun altındaki "Open link" butonunu bul (Download butonunu kullanma)
         time.sleep(1)  # 3'ten 1'e düşürüldü
-        download_btn = None
         open_link_btn = None
         download_href = None
         
-        print(f"  🔍 Open link/Download butonu aranıyor...")
+        print(f"  🔍 Open link butonu aranıyor...")
         for _ in range(15):  # 20'den 15'e düşürüldü
             # Tüm butonları ve linkleri bul
             all_elements = driver.find_elements(By.CSS_SELECTOR, "button, a")
             
-            # "Download" ve "Open link" butonlarını bul
-            download_candidates = []
+            # Sadece "Open link" butonlarını bul (Download butonunu kullanma)
             open_link_candidates = []
             
             for el in all_elements:
@@ -362,35 +360,24 @@ def download_from_kernelos_selenium(app_id, target_dir):
                             if match:
                                 href = match.group(1)
                     
-                    # Download butonu
-                    if "download" in text and "open link" not in text and "get link" not in text:
-                        download_candidates.append((y_pos, el, href))
-                    # Open link butonu
-                    elif "open link" in text:
+                    # Sadece "Open link" butonunu kullan (Download butonunu atla)
+                    if "open link" in text:
                         open_link_candidates.append((y_pos, el, href))
                 except Exception:
                     continue
             
-            # Open link butonunu öncelikle seç (daha güvenilir)
+            # Open link butonunu bul (en alttaki)
             if open_link_candidates:
                 open_link_candidates.sort(key=lambda x: x[0], reverse=True)
                 open_link_btn = open_link_candidates[0][1]
                 download_href = open_link_candidates[0][2]
                 print(f"  ✅ Open link butonu bulundu (href: {'var' if download_href else 'yok'})")
-                download_btn = open_link_btn  # Aynı değişkeni kullan
-                break
-            # Open link yoksa Download butonunu kullan
-            elif download_candidates:
-                download_candidates.sort(key=lambda x: x[0], reverse=True)
-                download_btn = download_candidates[0][1]
-                download_href = download_candidates[0][2]
-                print(f"  ✅ Download butonu bulundu (href: {'var' if download_href else 'yok'})")
                 break
             
             time.sleep(0.3)  # 0.5'ten 0.3'e düşürüldü
         
-        if not download_btn:
-            print("  ❌ Download/Open link butonu bulunamadı!")
+        if not open_link_btn:
+            print("  ❌ Open link butonu bulunamadı!")
             return None
         
         # 6. İndirme yöntemi: href varsa requests, yoksa tarayıcı indirmesi
@@ -456,12 +443,12 @@ def download_from_kernelos_selenium(app_id, target_dir):
                     print(f"  ⚠️ requests ile indirme başarısız: {type(e).__name__}, tarayıcı indirmesine geçiliyor...")
                     download_href = None
         
-        # href yoksa veya başarısız olduysa, butona tıkla ve tarayıcı indirmesini bekle
+        # href yoksa veya başarısız olduysa, Open link butonuna tıkla ve tarayıcı indirmesini bekle
         if not download_href:
-            print(f"  🖱️ Butona tıklanıyor (tarayıcı indirmesi)...")
+            print(f"  🖱️ Open link butonuna tıklanıyor (tarayıcı indirmesi)...")
             try:
-                # Butona tıkla
-                driver.execute_script("arguments[0].click();", download_btn)
+                # Open link butonuna tıkla
+                driver.execute_script("arguments[0].click();", open_link_btn)
                 time.sleep(1)  # 2'den 1'e düşürüldü
                 
                 # İndirmenin tamamlanmasını bekle (max 60 saniye)
