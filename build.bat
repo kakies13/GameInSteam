@@ -20,7 +20,20 @@ pyinstaller ^
     --hidden-import=PIL.Image ^
     --hidden-import=PIL.ImageTk ^
     --hidden-import=selenium ^
+    --hidden-import=selenium.webdriver ^
+    --hidden-import=selenium.webdriver.chrome ^
+    --hidden-import=selenium.webdriver.chrome.service ^
+    --hidden-import=selenium.webdriver.chrome.options ^
+    --hidden-import=selenium.webdriver.common.by ^
+    --hidden-import=selenium.webdriver.support.ui ^
+    --hidden-import=selenium.webdriver.support.expected_conditions ^
     --hidden-import=webdriver_manager ^
+    --hidden-import=webdriver_manager.chrome ^
+    --hidden-import=certifi ^
+    --hidden-import=urllib3 ^
+    --hidden-import=charset_normalizer ^
+    --collect-all selenium ^
+    --collect-all webdriver_manager ^
     main.py
 
 if %ERRORLEVEL% NEQ 0 (
@@ -56,7 +69,7 @@ if exist "installer.iss" (
         echo Building installer with Inno Setup...
         "%ISCC%" installer.iss
         echo.
-        echo   Installer: Output\GameInSteam_Setup_v2.4.exe
+        echo   Installer: Output\GameInSteam_Setup_v2.7.exe
     ) else (
         echo [INFO] Inno Setup bulunamadi - sadece EXE olusturuldu.
         echo        Installer icin: https://jrsoftware.org/isdl.php

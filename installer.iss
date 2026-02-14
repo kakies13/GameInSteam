@@ -32,6 +32,12 @@ PrivilegesRequired=admin
 ; Güzel görünüm
 WizardSizePercent=110
 
+; Son kullanıcı için otomatik kurulum
+DisableWelcomePage=no
+DisableDirPage=no
+DisableReadyPage=no
+DisableFinishedPage=no
+
 ; Lisans (opsiyonel)
 ; LicenseFile=LICENSE
 
@@ -41,8 +47,8 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "startmenuicon"; Description: "Create a Start Menu shortcut"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
+Name: "startmenuicon"; Description: "Create a Start Menu shortcut"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
 Name: "installdll"; Description: "Install xinput1_4.dll to Steam directory (required)"; Flags: checkedonce
 
 [Files]
@@ -77,7 +83,8 @@ begin
   // Eski versiyon kontrolü
   if RegKeyExists(HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1') then
   begin
-    if MsgBox('GameInSteam is already installed. Do you want to update it?',
+    if MsgBox('GameInSteam is already installed. Do you want to update it?' + #13#10#13#10 +
+              'Click Yes to update, or No to cancel.',
               mbConfirmation, MB_YESNO) = IDNO then
     begin
       Result := False;
@@ -85,15 +92,20 @@ begin
     end;
   end;
 
-  // Steam kurulu mu kontrol et
+  // Steam kurulu mu kontrol et (uyarı ver ama kuruluma devam et)
   SteamDir := ExpandConstant('{commonpf32}\Steam');
   if not DirExists(SteamDir) then
   begin
-    MsgBox('Steam is not installed at the default location:' + #13#10 +
-           SteamDir + #13#10#13#10 +
-           'Please install Steam first, then run this installer again.',
-           mbError, MB_OK);
-    Result := False;
+    if MsgBox('Steam is not installed at the default location:' + #13#10 +
+              SteamDir + #13#10#13#10 +
+              'GameInSteam requires Steam to be installed.' + #13#10 +
+              'Do you want to continue with the installation anyway?' + #13#10 +
+              '(You can install Steam later and run GameInSteam)',
+              mbConfirmation, MB_YESNO) = IDNO then
+    begin
+      Result := False;
+      Exit;
+    end;
   end;
 end;
 
@@ -105,9 +117,17 @@ begin
     if WizardIsTaskSelected('installdll') then
     begin
       MsgBox('✅ Installation complete!' + #13#10#13#10 +
-             '• GameInSteam has been installed.' + #13#10 +
+             '• GameInSteam has been installed successfully.' + #13#10 +
              '• xinput1_4.dll has been placed in your Steam directory.' + #13#10#13#10 +
-             'Please restart Steam before using GameInSteam.',
+             '⚠️ IMPORTANT: Please restart Steam before using GameInSteam!' + #13#10#13#10 +
+             'After restarting Steam, you can start adding games to your library.',
+             mbInformation, MB_OK);
+    end else
+    begin
+      MsgBox('✅ Installation complete!' + #13#10#13#10 +
+             '• GameInSteam has been installed successfully.' + #13#10#13#10 +
+             '⚠️ IMPORTANT: Please restart Steam before using GameInSteam!' + #13#10#13#10 +
+             'After restarting Steam, you can start adding games to your library.',
              mbInformation, MB_OK);
     end;
   end;

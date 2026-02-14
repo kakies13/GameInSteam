@@ -133,12 +133,19 @@ def _validate_downloaded_file(file_path):
 def _kill_zombie_chrome():
     """Arka planda kalmış headless Chrome ve ChromeDriver processlerini sonlandırır."""
     try:
-        subprocess.run(
+        # ChromeDriver process'lerini kapat (hata vermeden)
+        result = subprocess.run(
             ['taskkill', '/F', '/IM', 'chromedriver.exe'],
-            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=2
         )
+        # Process bulunamadıysa (exit code 128) bu normal, hata değil
+        if result.returncode not in [0, 128]:
+            pass  # Diğer hataları sessizce geç
+    except subprocess.TimeoutExpired:
+        pass  # Timeout olduysa sessizce geç
     except Exception:
-        pass
+        pass  # Tüm hataları sessizce geç
 
 
 # =============================================================================
@@ -192,7 +199,12 @@ def _create_chrome_driver(download_dir):
             print("  ✅ Chrome driver başlatıldı")
             return driver, temp_profile
         except Exception as e1:
-            print(f"  ⚠️ Native Chrome başarısız: {type(e1).__name__}")
+            error_msg = str(e1).lower()
+            # Chrome yüklü değil veya erişilemiyor hatası
+            if "chrome" in error_msg and ("not found" in error_msg or "cannot find" in error_msg or "not installed" in error_msg):
+                print(f"  ❌ Chrome yüklü değil veya bulunamadı")
+            else:
+                print(f"  ⚠️ Native Chrome başarısız: {type(e1).__name__}")
         
         # WebDriver Manager dene (fallback)
         if CHROME_DRIVER_MANAGER_AVAILABLE:
@@ -207,7 +219,11 @@ def _create_chrome_driver(download_dir):
                 print("  ✅ Chrome driver başlatıldı (webdriver-manager)")
                 return driver, temp_profile
             except Exception as e2:
-                print(f"  ⚠️ Chrome WebDriver Manager başarısız: {type(e2).__name__}")
+                error_msg = str(e2).lower()
+                if "chrome" in error_msg and ("not found" in error_msg or "cannot find" in error_msg or "not installed" in error_msg):
+                    print(f"  ❌ Chrome yüklü değil veya bulunamadı")
+                else:
+                    print(f"  ⚠️ Chrome WebDriver Manager başarısız: {type(e2).__name__}")
         
         print(f"  ❌ Chrome driver başlatılamadı")
         return None, None
@@ -678,14 +694,34 @@ def add_shortcut_from_manifest(app_id, app_name, on_progress=None):
         lua_ok, manifest_count = place_game_files(file_path, app_id)
     
     if not lua_ok:
-        return False, (
-            "kernelos.org'dan indirme başarısız!\n\n"
-            "Olası sebepler:\n"
-            "• Chrome açıkken çakışma (Chrome'u kapat ve tekrar dene)\n"
-            "• kernelos.org geçici olarak erişilemez\n"
-            "• Ağ bağlantı sorunu\n\n"
-            "Çözüm: Chrome'u kapat, birkaç dakika bekle ve tekrar dene."
-        )
+        # Chrome driver hatası mı kontrol et
+        chrome_error = False
+        if file_path is None:
+            # Chrome driver başlatılamadıysa
+            chrome_error = True
+        
+        if chrome_error:
+            return False, (
+                "Chrome driver başlatılamadı!\n\n"
+                "Olası sebepler:\n"
+                "• Google Chrome yüklü değil\n"
+                "• Chrome güncel değil\n"
+                "• Chrome erişilemiyor\n\n"
+                "Çözüm:\n"
+                "1. Google Chrome'u indirip kur: https://www.google.com/chrome/\n"
+                "2. Chrome'u güncelle\n"
+                "3. Bilgisayarı yeniden başlat\n"
+                "4. Tekrar dene"
+            )
+        else:
+            return False, (
+                "kernelos.org'dan indirme başarısız!\n\n"
+                "Olası sebepler:\n"
+                "• kernelos.org geçici olarak erişilemez\n"
+                "• Ağ bağlantı sorunu\n"
+                "• İnternet bağlantısı yok\n\n"
+                "Çözüm: Birkaç dakika bekle ve tekrar dene."
+            )
     
     _prog(0.65, "Temizlik yapılıyor...")
     print(f"\n📊 Sonuç: Lua ✅ | Yöntem: Kernelos | Manifest: {manifest_count}")
