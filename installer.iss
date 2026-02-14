@@ -70,6 +70,10 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+; Visual C++ Redistributables otomatik indirme ve kurulumu (eğer eksikse)
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -WindowStyle Hidden -Command ""try { $url = 'https://aka.ms/vs/17/release/vc_redist.x64.exe'; $output = '{tmp}\vc_redist.x64.exe'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri $url -OutFile $output -UseBasicParsing -ErrorAction Stop; Start-Process -FilePath $output -ArgumentList '/quiet', '/norestart' -Wait -NoNewWindow; Remove-Item $output -Force -ErrorAction SilentlyContinue; exit 0 } catch { exit 1 }"""; StatusMsg: "Installing Visual C++ Redistributables..."; Check: VCRedistNeedsInstall; Flags: runhidden waituntilterminated
+
+; Ana uygulama
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
@@ -102,31 +106,18 @@ begin
   end;
 end;
 
+// VC++ Redistributables kurulumu gerekli mi?
+function VCRedistNeedsInstall(): Boolean;
+begin
+  Result := not IsVCRedistInstalled();
+end;
+
 // Kurulum sırasında kontroller
 function InitializeSetup(): Boolean;
 var
   SteamDir: String;
-  VCRedistMissing: Boolean;
 begin
   Result := True;
-
-  // Visual C++ Redistributables kontrolü
-  VCRedistMissing := not IsVCRedistInstalled();
-  if VCRedistMissing then
-  begin
-    if MsgBox('Visual C++ Redistributables not detected.' + #13#10#13#10 +
-              'GameInSteam requires Visual C++ Redistributables to run.' + #13#10#13#10 +
-              'You can:' + #13#10 +
-              '1. Continue installation and install VC++ Redistributables manually later' + #13#10 +
-              '2. Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe' + #13#10#13#10 +
-              'Do you want to continue with the installation?' + #13#10 +
-              '(Click Yes to continue, or No to cancel and install VC++ Redistributables first)',
-              mbConfirmation, MB_YESNO) = IDNO then
-    begin
-      Result := False;
-      Exit;
-    end;
-  end;
 
   // Eski versiyon kontrolü
   if RegKeyExists(HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1') then
@@ -166,6 +157,7 @@ begin
     begin
       MsgBox('✅ Installation complete!' + #13#10#13#10 +
              '• GameInSteam has been installed successfully.' + #13#10 +
+             '• Visual C++ Redistributables has been installed automatically (if needed).' + #13#10 +
              '• xinput1_4.dll has been placed in your Steam directory.' + #13#10#13#10 +
              '⚠️ IMPORTANT: Please restart Steam before using GameInSteam!' + #13#10#13#10 +
              'After restarting Steam, you can start adding games to your library.',
@@ -173,7 +165,8 @@ begin
     end else
     begin
       MsgBox('✅ Installation complete!' + #13#10#13#10 +
-             '• GameInSteam has been installed successfully.' + #13#10#13#10 +
+             '• GameInSteam has been installed successfully.' + #13#10 +
+             '• Visual C++ Redistributables has been installed automatically (if needed).' + #13#10#13#10 +
              '⚠️ IMPORTANT: Please restart Steam before using GameInSteam!' + #13#10#13#10 +
              'After restarting Steam, you can start adding games to your library.',
              mbInformation, MB_OK);
