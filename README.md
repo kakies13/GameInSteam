@@ -2,8 +2,10 @@
 
 **Steam Library Manager** — Add any game to your Steam library with one click.
 
+[![Live Website](https://img.shields.io/badge/Live-Website-66c0f4?style=for-the-badge&logo=vercel)](https://game-in-steam.vercel.app/)
+
 ![Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-blue?logo=windows)
-![Version](https://img.shields.io/badge/Version-2.8-green)
+![Version](https://img.shields.io/badge/Version-3.0-green)
 
 ---
 
@@ -28,7 +30,7 @@
 ## 📥 Download & Install
 
 ### Option 1: Installer (Recommended)
-1. Download **`GameInSteam_Setup_v2.8.exe`** from [Releases](../../releases/latest)
+1. Download **`GameInSteam_Setup_v3.0.exe`** from [Releases](../../releases/latest)
 2. Run the installer → **Next → Next → Install → Finish**
 3. The installer automatically:
    - ✅ Installs GameInSteam
@@ -120,6 +122,6 @@ GameInSteam is not affiliated with Valve Corporation or Steam.
 
 ---
 
-## 📄 License
+## 📄 Distribution
 
-This project is licensed under the [GNU General Public License v2.0](LICENSE).
+This repository contains the official website and documentation for GameInSteam. The core application is proprietary and provided as a compiled installer for end-users.
