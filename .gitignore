@@ -39,3 +39,5 @@ build.bat
 installer.iss
 requirements.txt
 
+# Config
+config.json
