@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giriş Yap — GameInSteam</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // Supabase Initialization
+        const supabaseUrl = 'https://wubwatutcedxoeywogey.supabase.co';
+        const supabaseKey = 'sb_publishable_0Qwwoi50nK4Fvw9hMQBIhA_X3UnqQ7C';
+        const supabaseClient = window.supabase ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
+    </script>
+    <style>
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0e1117;
+            color: #c7d5e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .auth-container {
+            width: 100%;
+            max-width: 400px;
+            background: #1b2838;
+            padding: 40px;
+            border-radius: 12px;
+            border: 1px solid rgba(102, 192, 244, .15);
+            box-shadow: 0 24px 80px rgba(0, 0, 0, .5);
+            position: relative;
+        }
+
+        .auth-logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: #fff;
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .auth-logo span {
+            color: #66c0f4;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: #8f98a0;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            height: 44px;
+            background: #32404e;
+            border: 1px solid #3d5a73;
+            border-radius: 8px;
+            padding: 0 16px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 14px;
+            transition: border-color .2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #66c0f4;
+        }
+
+        .btn-auth {
+            width: 100%;
+            height: 48px;
+            background: #66c0f4;
+            color: #0e1117;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all .2s;
+            margin-top: 12px;
+        }
+
+        .btn-auth:hover {
+            background: #7fd1ff;
+            transform: translateY(-1px);
+        }
+
+        .auth-switch {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 14px;
+            color: #8f98a0;
+        }
+
+        .auth-switch a {
+            color: #66c0f4;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .error-message {
+            color: #ff4d4d;
+            font-size: 13px;
+            margin-top: 12px;
+            text-align: center;
+            display: none;
+        }
+
+        .back-link {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #8f98a0;
+            font-size: 13px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .back-link:hover {
+            color: #fff;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="auth-container">
+        <a href="index.html" class="back-link">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            Geri
+        </a>
+        <div class="auth-logo">Game<span>In</span>Steam</div>
+
+        <div id="login-form">
+            <div class="form-group">
+                <label class="form-label">E-posta</label>
+                <input type="email" id="login-email" class="form-input" placeholder="example@mail.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Şifre</label>
+                <input type="password" id="login-password" class="form-input" placeholder="••••••••">
+            </div>
+            <button class="btn-auth" onclick="handleLogin()">Giriş Yap</button>
+            <div class="auth-switch">
+                Hesabın yok mu? <a href="#" onclick="toggleAuth()">Kayıt Ol</a>
+            </div>
+        </div>
+
+        <div id="signup-form" style="display: none;">
+            <div class="form-group">
+                <label class="form-label">E-posta</label>
+                <input type="email" id="signup-email" class="form-input" placeholder="example@mail.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Şifre</label>
+                <input type="password" id="signup-password" class="form-input" placeholder="Min. 6 karakter">
+            </div>
+            <button class="btn-auth" onclick="handleSignup()">Kayıt Ol</button>
+            <div class="auth-switch">
+                Zaten hesabın var mı? <a href="#" onclick="toggleAuth()">Giriş Yap</a>
+            </div>
+        </div>
+
+        <div id="auth-error" class="error-message"></div>
+    </div>
+
+    <script>
+        function toggleAuth() {
+            const loginForm = document.getElementById('login-form');
+            const signupForm = document.getElementById('signup-form');
+            const isLogin = loginForm.style.display !== 'none';
+
+            loginForm.style.display = isLogin ? 'none' : 'block';
+            signupForm.style.display = isLogin ? 'block' : 'none';
+            document.querySelector('.auth-container h2') ? document.querySelector('.auth-container h2').textContent = isLogin ? 'Kayıt Ol' : 'Giriş Yap' : null;
+            showError('');
+        }
+
+        function showError(msg, type = 'error') {
+            const errDiv = document.getElementById('auth-error');
+            if (msg) {
+                errDiv.textContent = msg;
+                errDiv.style.display = 'block';
+                errDiv.style.color = type === 'success' ? '#5ba32b' : '#ff4d4d';
+            } else {
+                errDiv.style.display = 'none';
+            }
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+
+            if (!email || !password) return showError('Lütfen tüm alanları doldurun.');
+
+            if (!supabaseClient) return showError('Supabase bağlantısı kurulamadı.');
+
+            const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) return showError(error.message);
+
+            window.location.href = 'profile.html';
+        }
+
+        async function handleSignup() {
+            const email = document.getElementById('signup-email').value.trim();
+            const password = document.getElementById('signup-password').value;
+
+            if (!email || !password) return showError('Lütfen tüm alanları doldurun.');
+            if (password.length < 6) return showError('Şifre en az 6 karakter olmalıdır.');
+
+            if (!supabaseClient) return showError('Supabase bağlantısı kurulamadı.');
+
+            const { data, error } = await supabaseClient.auth.signUp({
+                email,
+                password,
+                options: {
+                    emailRedirectTo: window.location.origin + window.location.pathname.replace('auth.html', 'index.html')
+                }
+            });
+
+            if (error) return showError(error.message);
+
+            if (data?.user && data?.session === null) {
+                showError('Kayıt başarılı! Lütfen e-postanızı (Spam kutusu dahil) kontrol ederek hesabınızı onaylayın.', 'success');
+            } else if (data?.user && data?.session) {
+                window.location.href = 'profile.html';
+            }
+        }
+
+        // Check if already logged in
+        async function checkSession() {
+            if (!supabaseClient) return;
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) window.location.href = 'profile.html';
+        }
+        checkSession();
+    </script>
+</body>
+
+</html>
