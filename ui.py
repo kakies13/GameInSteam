@@ -23,7 +23,7 @@ try:
     from updater import check_for_update, download_update, apply_update, CURRENT_VERSION
 except ImportError:
     print("Error: updater.py not found!")
-    CURRENT_VERSION = "4.1"
+    CURRENT_VERSION = "4.5"
     def check_for_update(): return None
     def download_update(*args): return None
     def apply_update(*args): pass

@@ -19,10 +19,9 @@ for /f "tokens=1,2 delims=." %%a in ("%CURRENT_VERSION%") do (
     set MINOR=%%b
 )
 
-:: Minor versiyonu artır
-set /a NEW_MINOR=%MINOR%+1
-set NEW_VERSION=%MAJOR%.%NEW_MINOR%
-echo   New version: %NEW_VERSION%
+:: Minor versiyonu artır (Eger 4.5'e ulasmak istiyorsak bu adimi atlayabilir veya 4.5'e sabitleyebiliriz)
+set NEW_VERSION=4.5
+echo   Target version: %NEW_VERSION%
 
 :: VERSION.txt'yi güncelle
 echo %NEW_VERSION% > VERSION.txt
