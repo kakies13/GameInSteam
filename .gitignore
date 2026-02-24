@@ -30,14 +30,5 @@ Desktop.ini
 # Logs
 *.log
 
-# Source Code (private)
-main.py
-ui.py
-steam_handler.py
-updater.py
-build.bat
-installer.iss
-requirements.txt
-
-# Config
+# Private Config (Still ignored to prevent accidental leaks of local settings)
 config.json
