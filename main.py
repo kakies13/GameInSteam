@@ -1,4 +1,7 @@
-from ui import main as start_app # ui.py içindeki main'i start_app adıyla çağır
+from ui import main as start_app
+
+def main():
+    start_app()
 
 if __name__ == "__main__":
-    start_app()
+    main()

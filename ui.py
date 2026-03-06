@@ -3,16 +3,16 @@ import sys
 import json
 import time
 import threading
-import requests
+import requests # type: ignore
 import io
 import webbrowser
-import customtkinter as ctk
+import customtkinter as ctk # type: ignore
 import tkinter as tk
 from tkinter import messagebox
-from PIL import Image
-
+from PIL import Image, ImageDraw, ImageTk # type: ignore
+from typing import Any
 try:
-    from steam_handler import (
+    from steam_handler import ( # type: ignore
         check_stplugin_system, add_shortcut_from_manifest, list_added_games,
         remove_game, update_game, get_game_name_from_steam, restart_steam
     )
@@ -20,7 +20,7 @@ except ImportError:
     print("Error: steam_handler.py not found!")
 
 try:
-    from updater import check_for_update, download_update, apply_update, CURRENT_VERSION
+    from updater import check_for_update, download_update, apply_update, CURRENT_VERSION # type: ignore
 except ImportError:
     print("Error: updater.py not found!")
     CURRENT_VERSION = "4.5"
@@ -39,9 +39,8 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
 class GameInSteamApp(ctk.CTk):
-    def __init__(self, user):
+    def __init__(self):
         super().__init__()
-        self.user = user
 
         # Temel Ayarlar
         self.title("GameInSteam - Steam Library Manager")
@@ -63,19 +62,35 @@ class GameInSteamApp(ctk.CTk):
         self.configure(fg_color=self.c_bg)
 
         # Durum ve Data Yönetimi
-        self._name_cache = {}
-        self._img_cache = {}
-        self._busy = False
-        self._config = self._load_config()
-        self._current_page = None
+        self._name_cache: dict[str, str] = {}
+        self._img_cache: dict[str, Any] = {}
+        self._crack_cache: dict[str, Any] = {}
         
-        self._check_license()
+        # Generate a fallback image for missing game banners
+        fallback_img = Image.new('RGB', (IMG_W, IMG_H), color=self.c_sidebar)
+        try:
+            draw = ImageDraw.Draw(fallback_img)
+            # Try to center the text manually since we might not have a loaded font
+            draw.text((IMG_W//2 - 25, IMG_H//2 - 5), "NO IMAGE", fill=self.c_text_dim)
+        except Exception:
+            pass
+        self._empty_img = ImageTk.PhotoImage(fallback_img)
+        
+        self._busy = False
+        self._config: dict[str, Any] = self._load_config()
+        self._current_page: str = ""
         
         # Güncelleme Kontrolü Event'i
         self._update_lock = threading.Lock()
         self._update_checking = False
         self._update_dialog_open = False
         self._update_info = None
+
+        # Wishlist & Discover State
+        self._name_cache = {}
+        self._trending_games = []
+        self._categories = ["All", "Cracked", "Protected", "Clean / No DRM"]
+        self.current_category = "All"
 
         # Arayüzü İnşa Et
         self._build_ui()
@@ -87,23 +102,9 @@ class GameInSteamApp(ctk.CTk):
     # ─────────────────────────────────────────────────────────
     # OVERRIDE & CHECK
     # ─────────────────────────────────────────────────────────
-    def _check_license(self):
-        try:
-            plan = self.user.user_metadata.get("plan", None)
-            if not plan:
-                self._show_no_license_error()
-        except AttributeError:
-             self._show_no_license_error()
-             
-    def _show_no_license_error(self):
-        messagebox.showerror(
-            "Access Denied", 
-            "You do not have a valid GameInSteam subscription.\nPlease purchase a Premium plan from our website."
-        )
-        self.destroy()
-        sys.exit(0)
 
-    def _load_config(self):
+
+    def _load_config(self) -> dict[str, Any]:
         default = {
             "auto_check_updates": True,
             "auto_download_updates": False,
@@ -150,7 +151,6 @@ class GameInSteamApp(ctk.CTk):
         self.btn_dash = self._create_nav_button("DASHBOARD", "add", self._show_dash)
         self.btn_lib = self._create_nav_button("LIBRARY", "lib", self._show_lib)
         self.btn_settings = self._create_nav_button("SETTINGS", "settings", self._show_settings)
-        self.btn_profile = self._create_nav_button("PROFILE", "profile", self._show_profile)
 
         # Alt Bilgi ve Durum
         self.sys_status_lbl = ctk.CTkLabel(self.sidebar, text="Checking system...", text_color=self.c_text_dim, font=ctk.CTkFont(size=11))
@@ -166,12 +166,10 @@ class GameInSteamApp(ctk.CTk):
         self.page_dash = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.page_lib = ctk.CTkScrollableFrame(self.main_frame, fg_color="transparent")
         self.page_settings = ctk.CTkScrollableFrame(self.main_frame, fg_color="transparent")
-        self.page_profile = ctk.CTkFrame(self.main_frame, fg_color="transparent")
 
         self._build_dash()
         self._build_lib()
         self._build_settings()
-        self._build_profile()
 
         # İlk sayfa
         self._show_dash()
@@ -188,9 +186,9 @@ class GameInSteamApp(ctk.CTk):
         return btn
 
     def _reset_nav(self):
-        for b in [self.btn_dash, self.btn_lib, self.btn_settings, self.btn_profile]:
+        for b in [self.btn_dash, self.btn_lib, self.btn_settings]:
             b.configure(fg_color="transparent", text_color=self.c_text_dim)
-        for page in [self.page_dash, self.page_lib, self.page_settings, self.page_profile]:
+        for page in [self.page_dash, self.page_lib, self.page_settings]:
             page.pack_forget()
 
     def _show_dash(self):
@@ -212,55 +210,189 @@ class GameInSteamApp(ctk.CTk):
         self.page_settings.pack(fill="both", expand=True, padx=30, pady=30)
         self._current_page = "settings"
 
-    def _show_profile(self):
-        self._reset_nav()
-        self.btn_profile.configure(fg_color=self.c_accent, text_color=self.c_bg)
-        self.page_profile.pack(fill="both", expand=True, padx=30, pady=30)
-        self._current_page = "profile"
-
     # ─────────────────────────────────────────────────────────
     # DASHBOARD (Oyun Ekleme Sayfası)
     # ─────────────────────────────────────────────────────────
     def _build_dash(self):
-        lbl_title = ctk.CTkLabel(self.page_dash, text="ONE-CLICK ADD", font=ctk.CTkFont("Segoe UI", size=24, weight="bold"), text_color=self.c_text)
-        lbl_title.pack(anchor="w", pady=(0, 20))
+        # Dashboard Artık Ana Bir Container İçinde (Scrollable)
+        self.dash_scroll = ctk.CTkScrollableFrame(self.page_dash, fg_color="transparent")
+        self.dash_scroll.pack(fill="both", expand=True)
 
-        card = ctk.CTkFrame(self.page_dash, fg_color=self.c_card, corner_radius=15)
-        card.pack(fill="x", pady=10)
+        lbl_title = ctk.CTkLabel(self.dash_scroll, text="DASHBOARD", font=ctk.CTkFont("Segoe UI", size=26, weight="bold"), text_color=self.c_text)
+        lbl_title.pack(anchor="w", pady=(10, 25), padx=10)
+        
+        # --- ADD GAME CENTER ---
+        add_card = ctk.CTkFrame(self.dash_scroll, fg_color=self.c_card, corner_radius=20)
+        add_card.pack(fill="x", pady=(0, 25), padx=5)
+        
+        add_inner = ctk.CTkFrame(add_card, fg_color="transparent")
+        add_inner.pack(padx=25, pady=25, fill="x")
 
-        inner = ctk.CTkFrame(card, fg_color="transparent")
-        inner.pack(padx=25, pady=25, fill="x")
+        # Row 1: Quick Find
+        ctk.CTkLabel(add_inner, text="🔍 Quick Find (ID or URL Manager)", text_color=self.c_accent, font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w")
+        
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", self._on_search_change)
+        self.inp_search = ctk.CTkEntry(add_inner, height=45, placeholder_text="Type game name to find AppID...", 
+                                        fg_color=self.c_bg, border_color=self.c_sidebar, text_color=self.c_text, textvariable=self.search_var)
+        self.inp_search.pack(fill="x", pady=(10, 10))
 
-        # App ID
-        ctk.CTkLabel(inner, text="Steam App ID", text_color=self.c_text_dim, font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", pady=(0, 5))
-        self.inp_id = ctk.CTkEntry(inner, height=45, placeholder_text="Can add multiple, separate with commas (e.g., 730, 440)", 
+        # Area for search results
+        self.search_results_frame = ctk.CTkScrollableFrame(add_inner, height=0, fg_color=self.c_bg, corner_radius=5)
+        # We pack_forget() it dynamically later
+
+        # Row 2: Manual Data
+        input_row = ctk.CTkFrame(add_inner, fg_color="transparent")
+        input_row.pack(fill="x", pady=10)
+
+        id_col = ctk.CTkFrame(input_row, fg_color="transparent")
+        id_col.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        ctk.CTkLabel(id_col, text="Steam App ID", text_color=self.c_text_dim, font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w")
+        self.inp_id = ctk.CTkEntry(id_col, height=45, placeholder_text="e.g. 730, 440", 
                                    fg_color=self.c_bg, border_color=self.c_sidebar, text_color=self.c_text)
-        self.inp_id.pack(fill="x", pady=(0, 15))
+        self.inp_id.pack(fill="x", pady=5)
 
-        # Oyun Adı
-        ctk.CTkLabel(inner, text="Game Name (Optional)", text_color=self.c_text_dim, font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", pady=(0, 5))
-        self.inp_name = ctk.CTkEntry(inner, height=45, placeholder_text="In bulk adding, name is determined automatically...",
+        name_col = ctk.CTkFrame(input_row, fg_color="transparent")
+        name_col.pack(side="left", fill="x", expand=True, padx=(10, 0))
+        ctk.CTkLabel(name_col, text="Game Name (Optional)", text_color=self.c_text_dim, font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w")
+        self.inp_name = ctk.CTkEntry(name_col, height=45, placeholder_text="Enter name...",
                                      fg_color=self.c_bg, border_color=self.c_sidebar, text_color=self.c_text)
-        self.inp_name.pack(fill="x", pady=(0, 20))
+        self.inp_name.pack(fill="x", pady=5)
 
-        self.btn_add = ctk.CTkButton(inner, text="ADD", height=45, fg_color=self.c_accent, text_color=self.c_bg, 
-                                     hover_color=self.c_accent_hover, font=ctk.CTkFont(weight="bold"),
+        # Action Buttons
+        btn_container = ctk.CTkFrame(add_inner, fg_color="transparent")
+        btn_container.pack(fill="x", pady=(15, 0))
+
+        self.btn_add = ctk.CTkButton(btn_container, text="ADD TO LIBRARY", height=50, fg_color=self.c_accent, text_color=self.c_bg, 
+                                     hover_color=self.c_accent_hover, font=ctk.CTkFont(size=14, weight="bold"),
                                      command=self._do_add)
-        self.btn_add.pack(fill="x", pady=(0, 10))
+        self.btn_add.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
-        # Steam Restart Butonu
-        self.btn_restart = ctk.CTkButton(inner, text="RESTART STEAM", height=45, 
-                                         fg_color="transparent", border_width=2, border_color=self.c_accent,
-                                         text_color=self.c_accent, hover_color=self.c_card, 
-                                         font=ctk.CTkFont(weight="bold"),
+        self.btn_restart = ctk.CTkButton(btn_container, text="🚀 RESTART STEAM", height=50,
+                                         fg_color="#1e293b", text_color="#FFFFFF",
+                                         hover_color="#334155", font=ctk.CTkFont(size=14, weight="bold"),
                                          command=self._do_steam_restart)
-        self.btn_restart.pack(fill="x")
+        self.btn_restart.pack(side="left", fill="x", expand=True, padx=(5, 0))
 
-        self.status_lbl = ctk.CTkLabel(inner, text="", text_color=self.c_text_dim)
-        self.status_lbl.pack(pady=(10, 0))
-
-        self.prog_bar = ctk.CTkProgressBar(inner, fg_color=self.c_sidebar, progress_color=self.c_accent, height=8)
+        self.status_lbl = ctk.CTkLabel(add_inner, text="", text_color=self.c_text_dim)
+        self.status_lbl.pack(pady=(15, 0))
+        
+        self.prog_bar = ctk.CTkProgressBar(add_inner, fg_color=self.c_sidebar, progress_color=self.c_accent, height=8)
         self.prog_bar.set(0)
+        self.prog_bar.pack(fill="x", pady=10)
+
+
+    # ─────────────────────────────────────────────────────────
+    # ARAMA (SEARCH) İŞLEMLERİ
+    # ─────────────────────────────────────────────────────────
+    def _on_search_change(self, *args):
+        query = self.search_var.get().strip()
+        
+        if len(query) < 3:
+            self.search_results_frame.pack_forget()
+            return
+            
+        if hasattr(self, '_search_timer'):
+            self.after_cancel(self._search_timer)
+        self._search_timer = self.after(500, lambda: self._start_search(query))
+
+    def _start_search(self, query):
+        for widget in self.search_results_frame.winfo_children():
+            widget.destroy()
+        self.search_results_frame.pack(fill="x", pady=(5, 0))
+        lbl = ctk.CTkLabel(self.search_results_frame, text="Searching Steam Store...", font=ctk.CTkFont(size=12, slant="italic"), text_color=self.c_text_dim)
+        lbl.pack(pady=10)
+        
+        threading.Thread(target=self._perform_steam_search, args=(query,), daemon=True).start()
+
+    def _perform_steam_search(self, query):
+        try:
+            url = f"https://store.steampowered.com/api/storesearch/?term={query}&l=english&cc=US"
+            resp = requests.get(url, timeout=5)
+            data = resp.json()
+            items = data.get("items", [])[:6]
+            
+            # --- DENUVO / DRM DEDEKTÖRÜ (Curator Yöntemi) ---
+            if items:
+                try:
+                    # Steam'in API'si Denuvo'yu gizlediği için "Denuvo Games" Curator'ünün listesini çekip oradan ID arıyoruz
+                    curator_url = "https://store.steampowered.com/curator/26095454-Denuvo-Games/ajaxgetfilteredrecommendations/render/?query=&start=0&count=1000"
+                    c_resp = requests.get(curator_url, timeout=5)
+                    c_data = c_resp.json()
+                    html_data = c_data.get('results_html', '')
+                    
+                    for item in items:
+                        aid_str = str(item.get("id"))
+                        item["has_denuvo"] = False
+                        
+                        # Eğer ID curator sayfasının HTML kodlarında geçiyorsa, bu oyun %99 Denuvo'ludur veya 3. parti DRM içerir
+                        if aid_str in html_data:
+                            item["has_denuvo"] = True
+                            
+                except Exception:
+                    pass # İstek başarısız olursa normal listeye devam
+                    
+            self.after(0, self._render_search_results, items)
+        except Exception as e:
+            self.after(0, lambda: self._render_search_results([], error=True))
+
+    def _render_search_results(self, items, error=False):
+        for widget in self.search_results_frame.winfo_children():
+            widget.destroy()
+            
+        if error:
+            lbl = ctk.CTkLabel(self.search_results_frame, text="Search failed. Please check internet.", text_color=self.c_danger)
+            lbl.pack(pady=5)
+            return
+            
+        if not items:
+            lbl = ctk.CTkLabel(self.search_results_frame, text="No games found.", text_color=self.c_text_dim)
+            lbl.pack(pady=5)
+            return
+            
+        for item in items: # Slicing was done in the search function
+            app_id = str(item.get("id", ""))
+            name = item.get("name", "Unknown Game")
+            has_denuvo = item.get("has_denuvo", False)
+            
+            row = ctk.CTkFrame(self.search_results_frame, fg_color="transparent")
+            row.pack(fill="x", pady=2)
+            
+            display_text = f"{name}  [{app_id}]"
+            text_color = self.c_text
+            
+            if has_denuvo:
+                display_text = f"⚠️ DENUVO/DRM: {name} [{app_id}]"
+                text_color = self.c_danger # Kırmızı uyarı rengi
+            
+            btn = ctk.CTkButton(
+                row, 
+                text=display_text, 
+                anchor="w", 
+                fg_color="transparent", 
+                text_color=text_color, 
+                hover_color=self.c_sidebar,
+                command=lambda aid=app_id, n=name, den=has_denuvo: self._select_search_result(aid, n, den)
+            )
+            btn.pack(fill="x", expand=True)
+
+    def _select_search_result(self, app_id, name, has_denuvo=False):
+        if has_denuvo:
+            # Kullanıcıyı uyar ama yine de eklemesine izin ver
+            msg = f"'{name}' uses Denuvo or a 3rd-party DRM protection.\n\nEven though GameInSteam can add it successfully, the game WILL NOT LAUNCH without a proper bypass ticket.\n\nDo you still want to add it?"
+            if not messagebox.askyesno("DRM Protection Warning", msg):
+                self.search_var.set("")
+                self.search_results_frame.pack_forget()
+                return
+                
+        self.inp_id.delete(0, 'end')
+        self.inp_id.insert(0, app_id)
+        
+        self.inp_name.delete(0, 'end')
+        self.inp_name.insert(0, name)
+        
+        self.search_var.set("")
+        self.search_results_frame.pack_forget()
 
     # ─────────────────────────────────────────────────────────
     # KÜTÜPHANE SAYFASI (Library)
@@ -275,11 +407,58 @@ class GameInSteamApp(ctk.CTk):
         self.lib_count = ctk.CTkLabel(top, text="Added Games: 0", text_color=self.c_text_dim)
         self.lib_count.pack(side="left")
         
+        # --- SMART CATEGORIES ---
+        self.cat_var = ctk.StringVar(value="All")
+        self.cat_menu = ctk.CTkOptionMenu(top, values=self._categories, variable=self.cat_var, 
+                                         height=28, width=120, fg_color=self.c_sidebar, 
+                                         button_color=self.c_sidebar, button_hover_color=self.c_accent,
+                                         command=self._filter_library)
+        self.cat_menu.pack(side="left", padx=15)
+        
+        # --- KÜTÜPHANE ARAMA (Library Search) ---
+        search_frame = ctk.CTkFrame(top, fg_color="transparent")
+        search_frame.pack(side="left", fill="x", expand=True, padx=20)
+        
+        self.lib_search_var = tk.StringVar()
+        self.lib_search_var.trace_add("write", self._filter_library)
+        self.lib_search_entry = ctk.CTkEntry(search_frame, height=28, placeholder_text="🔍 Filter by Name or AppID...", 
+                                         font=ctk.CTkFont(size=12), fg_color=self.c_bg, border_width=1, 
+                                         border_color=self.c_sidebar, textvariable=self.lib_search_var)
+        self.lib_search_entry.pack(fill="x")
+        
         ctk.CTkButton(top, text="Refresh", width=80, height=28, fg_color=self.c_card, hover_color=self.c_sidebar, 
                       command=self._load_games).pack(side="right")
 
         self.lib_container = ctk.CTkFrame(self.page_lib, fg_color="transparent")
         self.lib_container.pack(fill="both", expand=True)
+
+    def _filter_library(self, *args):
+        query = self.lib_search_var.get().strip().lower()
+        cat = self.cat_var.get()
+        
+        for idx, card in enumerate(self.lib_container.winfo_children()):
+            if not hasattr(card, '_app_id'):
+                continue
+                
+            aid = card._app_id
+            name = self._name_cache.get(aid, "").lower()
+            
+            # Category Filter
+            status = self._crack_cache.get(aid, {})
+            # Use safe retrieval for linting
+            is_cracked = bool(status.get("cracked", False))
+            match_cat = True
+            if cat == "Cracked": match_cat = is_cracked
+            elif cat == "Protected": match_cat = not is_cracked and status.get("protection") != "Unknown"
+            elif cat == "Clean / No DRM": match_cat = status.get("protection") == "Unknown"
+            
+            # Text Filter
+            match_text = query in name or query in aid
+            
+            if match_text and match_cat:
+                card.pack(fill="x", pady=6) 
+            else:
+                card.pack_forget()
 
     def _load_games(self):
         for w in self.lib_container.winfo_children(): w.destroy()
@@ -296,12 +475,13 @@ class GameInSteamApp(ctk.CTk):
     def _game_card(self, g):
         aid = g["app_id"]
         card = ctk.CTkFrame(self.lib_container, fg_color=self.c_card, corner_radius=10)
+        card._app_id = aid # Attach AppID for quick searching filtering
         card.pack(fill="x", pady=6)
         
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=15, pady=15)
 
-        img_lbl = tk.Label(row, bg=self.c_bg, width=180, height=85)
+        img_lbl = tk.Label(row, bg=self.c_bg, image=self._empty_img, bd=0)
         img_lbl.pack(side="left", padx=(0, 20))
 
         info = ctk.CTkFrame(row, fg_color="transparent")
@@ -311,7 +491,14 @@ class GameInSteamApp(ctk.CTk):
         name_lbl = ctk.CTkLabel(info, text=cached or f"Game #{aid}", font=ctk.CTkFont(size=18, weight="bold"), text_color=self.c_text)
         name_lbl.pack(anchor="w")
 
-        ctk.CTkLabel(info, text=f"AppID: {aid}", font=ctk.CTkFont(size=11), text_color=self.c_accent).pack(anchor="w")
+        id_row = ctk.CTkFrame(info, fg_color="transparent")
+        id_row.pack(anchor="w")
+        ctk.CTkLabel(id_row, text=f"AppID: {aid}", font=ctk.CTkFont(size=11), text_color=self.c_text_dim).pack(side="left")
+        
+        # Status Label (Crack/Denuvo)
+        status_lbl = ctk.CTkLabel(id_row, text="checking status...", font=ctk.CTkFont(size=10, weight="bold"), 
+                                   fg_color=self.c_sidebar, corner_radius=4, padx=5)
+        status_lbl.pack(side="left", padx=10)
         
         btns = ctk.CTkFrame(row, fg_color="transparent")
         btns.pack(side="right")
@@ -324,18 +511,24 @@ class GameInSteamApp(ctk.CTk):
         if not cached: threading.Thread(target=self._fetch_name, args=(aid, name_lbl), daemon=True).start()
         if aid not in self._img_cache: threading.Thread(target=self._fetch_image, args=(aid, img_lbl), daemon=True).start()
         else: img_lbl.configure(image=self._img_cache[aid])
+        
+        # Fetch Crack Status
+        threading.Thread(target=self._fetch_crack_status, args=(aid, cached, status_lbl), daemon=True).start()
 
     def _fetch_name(self, aid, lbl):
         try:
             name = get_game_name_from_steam(aid)
             if name:
                 self._name_cache[aid] = name
-                # Avoid GUI thread error if widget is destroyed
-                def safe_lbl():
-                    try: lbl.configure(text=name)
-                    except: pass
-                self.after(0, safe_lbl)
-        except: pass
+                def safe_update():
+                    if lbl.winfo_exists():
+                        lbl.configure(text=name)
+                        # Re-trigger search filter just in case this game matches the current typed query
+                        if hasattr(self, 'lib_search_var') and len(self.lib_search_var.get()) > 0:
+                            self._filter_library()
+                self.after(0, safe_update)
+        except Exception:
+            pass
 
     def _fetch_image(self, aid, lbl):
         try:
@@ -343,14 +536,74 @@ class GameInSteamApp(ctk.CTk):
             resp = requests.get(url, timeout=5)
             if resp.status_code == 200:
                 img = Image.open(io.BytesIO(resp.content)).resize((IMG_W, IMG_H), Image.LANCZOS)
-                from PIL import ImageTk
+                from PIL import ImageTk # type: ignore
                 photo = ImageTk.PhotoImage(img) # using standard ImageTk inside Tkinter Label is still okay or use CTkImage
                 self._img_cache[aid] = photo
                 def safe_update():
-                    try: lbl.configure(image=photo)
-                    except: pass
+                    if lbl.winfo_exists():
+                        lbl.configure(image=photo)
                 self.after(0, safe_update)
         except: pass
+
+    def _fetch_crack_status(self, aid, name, lbl):
+        # Check cache
+        if aid in self._crack_cache:
+            self.after(0, lambda: self._apply_status_ui(lbl, self._crack_cache[aid]))
+            return
+
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            # Search by AppID first
+            r = requests.get(f"https://gamestatus.info/back/api/gameinfo/game/?search={aid}", headers=headers, timeout=10)
+            data = r.json()
+            results = data.get("results", [])
+            
+            game_data = None
+            for res in results:
+                if str(res.get("steam_prod_id")) == str(aid):
+                    game_data = res
+                    break
+            
+            if not game_data and name:
+                # Fallback to name search
+                r = requests.get(f"https://gamestatus.info/back/api/gameinfo/game/?search={name}", headers=headers, timeout=10)
+                results = r.json().get("results", [])
+                for res in results:
+                    if res.get("title").lower() == name.lower():
+                        game_data = res
+                        break
+
+            if game_data:
+                status = {
+                    "cracked": bool(game_data.get("crack_date")),
+                    "protection": game_data.get("protections", "Unknown"),
+                    "date": game_data.get("crack_date") or "Uncracked"
+                }
+                # Use update to avoid item assignment lint error on some type checkers
+                self._crack_cache.update({aid: status})
+                def safe_update():
+                    if lbl.winfo_exists():
+                        self._apply_status_ui(lbl, status)
+                self.after(0, safe_update)
+            else:
+                def safe_not_found():
+                    if lbl.winfo_exists():
+                        lbl.configure(text="CLEAN / NO DRM", fg_color="#34495e")
+                self.after(0, safe_not_found)
+        except Exception:
+            def safe_err():
+                if lbl.winfo_exists():
+                    lbl.configure(text="ERROR", fg_color=self.c_danger)
+            self.after(0, safe_err)
+
+    def _apply_status_ui(self, lbl, status):
+        if status["cracked"]:
+            lbl.configure(text=f"CRACKED ({status['date']})", fg_color=self.c_success)
+        else:
+            prot = status["protection"] if status["protection"] else "PROTECTED"
+            lbl.configure(text=prot.upper(), fg_color="#e67e22")
+
+
 
     # ─────────────────────────────────────────────────────────
     # AYARLAR (Settings)
@@ -358,6 +611,7 @@ class GameInSteamApp(ctk.CTk):
     def _build_settings(self):
         lbl_title = ctk.CTkLabel(self.page_settings, text="SETTINGS", font=ctk.CTkFont("Segoe UI", size=24, weight="bold"), text_color=self.c_text)
         lbl_title.pack(anchor="w", pady=(0, 20))
+
 
         # Güncellemeler
         card1 = ctk.CTkFrame(self.page_settings, fg_color=self.c_card, corner_radius=15)
@@ -380,70 +634,30 @@ class GameInSteamApp(ctk.CTk):
         self.update_status_label = ctk.CTkLabel(c1i, text="", text_color=self.c_text_dim)
         self.update_status_label.pack(anchor="w")
 
-        # Steam Paneli
+        # Discord/Global
         card2 = ctk.CTkFrame(self.page_settings, fg_color=self.c_card, corner_radius=15)
         card2.pack(fill="x", pady=10)
         c2i = ctk.CTkFrame(card2, fg_color="transparent")
         c2i.pack(padx=20, pady=20, fill="x")
+
+        ctk.CTkLabel(c2i, text="Community & Support", font=ctk.CTkFont(weight="bold", size=14)).pack(anchor="w", pady=(0, 5))
+        ctk.CTkLabel(c2i, text="Join our Discord for news and support:", text_color=self.c_text_dim).pack(anchor="w", pady=(0, 10))
         
-        ctk.CTkLabel(c2i, text="Steam Integration", font=ctk.CTkFont(weight="bold", size=14)).pack(anchor="w", pady=(0, 10))
-        ctk.CTkLabel(c2i, text="Steam may need to be closed and reopened after adding or removing games.", text_color=self.c_text_dim).pack(anchor="w", pady=(0, 10))
-        ctk.CTkButton(c2i, text="Restart Steam", fg_color=self.c_success, hover_color="#0d9468", command=self._do_restart_steam).pack(anchor="w")
+        discord_btn = ctk.CTkButton(c2i, text="🎮 JOIN DISCORD SERVER", fg_color="#5865F2", text_color="#FFFFFF", 
+                                  hover_color="#4752C4", font=ctk.CTkFont(weight="bold"), 
+                                  command=lambda: webbrowser.open("https://discord.gg/krzbgakKJf"))
+        discord_btn.pack(fill="x", pady=(0, 15))
+        
+        ctk.CTkButton(c2i, text="SAVE ALL SETTINGS", fg_color=self.c_accent, text_color=self.c_bg, font=ctk.CTkFont(weight="bold"), command=self._save_settings).pack(fill="x")
 
     def _save_settings(self, *args):
-        self._config["auto_check_updates"] = self.sw_auto_check.get() == 1
-        self._config["auto_download_updates"] = self.sw_auto_dl.get() == 1
-        # Discord settings now persistent from config only, no UI update here
-        self._save_config()
+        try:
+            self._config["auto_check_updates"] = bool(self.sw_auto_check.get() == 1)
+            self._config["auto_download_updates"] = bool(self.sw_auto_dl.get() == 1)
+            self._save_config()
+        except: pass
 
-    # ─────────────────────────────────────────────────────────
-    # PROFİL SAYFASI (YENİ)
-    # ─────────────────────────────────────────────────────────
-    def _build_profile(self):
-        lbl_title = ctk.CTkLabel(self.page_profile, text="PROFILE", font=ctk.CTkFont("Segoe UI", size=24, weight="bold"), text_color=self.c_text)
-        lbl_title.pack(anchor="w", pady=(0, 20))
 
-        card = ctk.CTkFrame(self.page_profile, fg_color=self.c_card, corner_radius=15)
-        card.pack(fill="x", pady=10)
-
-        inner = ctk.CTkFrame(card, fg_color="transparent")
-        inner.pack(padx=30, pady=30, fill="x")
-
-        # Veritabanından gelen kullanıcı eklentileri (Plan & E-Posta)
-        email = self.user.email if hasattr(self.user, 'email') else "Unknown User"
-        plan = self.user.user_metadata.get("plan", "Unknown Plan")
-        
-        ctk.CTkLabel(inner, text="ACCOUNT INFORMATION", text_color=self.c_text_dim, font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w", pady=(0, 5))
-        ctk.CTkLabel(inner, text=email, font=ctk.CTkFont(size=22, weight="bold")).pack(anchor="w", pady=(0, 15))
-
-        # Abonelik Kartı
-        sub_frame = ctk.CTkFrame(inner, fg_color=self.c_sidebar, corner_radius=8)
-        sub_frame.pack(fill="x", pady=(0, 20))
-        
-        ctk.CTkLabel(sub_frame, text="Subscription Status:", font=ctk.CTkFont(size=14)).pack(side="left", padx=15, pady=15)
-        ctk.CTkLabel(sub_frame, text=f"💎 {plan}", font=ctk.CTkFont(size=14, weight="bold"), text_color=self.c_accent).pack(side="right", padx=15, pady=15)
-
-        # Discord & Çıkış Yap alanı
-        btn_frame = ctk.CTkFrame(inner, fg_color="transparent")
-        btn_frame.pack(fill="x", pady=(10, 0))
-
-        ctk.CTkButton(
-            btn_frame, text="💬 Join Community Discord", fg_color="#5865F2", hover_color="#4752C4", height=40, font=ctk.CTkFont(weight="bold"),
-            command=lambda: webbrowser.open("https://discord.gg/")  # Opsiyonel: Kendi sunucu bağlantını ekle
-        ).pack(side="left", expand=True, fill="x", padx=(0, 10))
-
-        ctk.CTkButton(
-            btn_frame, text="✖ Logout", fg_color="transparent", border_width=1, border_color=self.c_danger, 
-            text_color=self.c_danger, hover_color=self.c_danger_hover, height=40, font=ctk.CTkFont(weight="bold"),
-            command=self._do_logout
-        ).pack(side="right", expand=True, fill="x", padx=(10, 0))
-
-    def _do_logout(self):
-        if messagebox.askyesno("Exit", "You will be logged out and returned to the login screen. Do you confirm?"):
-            if os.path.exists(SESSION_FILE):
-                os.remove(SESSION_FILE)
-            self.destroy()
-            sys.exit(0) # main.py'ın programı kapatıp/yeniden açması için güvenli yol
 
     def _do_steam_restart(self):
         """Manuel Steam restart işlemini tetikler"""
@@ -452,7 +666,7 @@ class GameInSteamApp(ctk.CTk):
 
     def _worker_steam_restart(self):
         try:
-            from steam_handler import restart_steam
+            from steam_handler import restart_steam # type: ignore
             ok = restart_steam()
             if ok:
                 self.after(0, lambda: [
@@ -478,6 +692,8 @@ class GameInSteamApp(ctk.CTk):
             else:
                 self.sys_status_lbl.configure(text=f"⚠️ {msg.split('\n')[0]}", text_color="#f59e0b")
         except: pass
+
+
 
     def _do_add(self):
         app_ids_str = self.inp_id.get().strip()
@@ -508,8 +724,16 @@ class GameInSteamApp(ctk.CTk):
         for idx, app_id in enumerate(app_ids):
             try:
                 game_name = base_name if total == 1 else f"{base_name} ({idx+1}/{total})"
-                self.after(0, lambda i=idx+1, t=total: self._update_progress(f"Adding game {i}/{t}..."))
-                ok, msg = add_shortcut_from_manifest(app_id, game_name)
+                
+                # Callback to update the progress bar and status text dynamically
+                def prog_cb(pct, m):
+                    # pct is 0.0 to 1.0 from steam_handler
+                    self.after(0, lambda p=pct, text=m, i=idx: [
+                        self.prog_bar.set(p),
+                        self.status_lbl.configure(text=f"[{i+1}/{total}] {text}")
+                    ])
+                
+                ok, msg = add_shortcut_from_manifest(app_id, game_name, on_progress=prog_cb)
                 results.append((app_id, ok, msg))
             except Exception as e:
                 results.append((app_id, False, str(e)))
@@ -550,15 +774,22 @@ class GameInSteamApp(ctk.CTk):
 
     def _set_busy(self, busy, msg=""):
         self._busy = busy
+        self.btn_add.configure(state="disabled" if busy else "normal")
+        self.btn_restart.configure(state="disabled" if busy else "normal")
+        self.inp_id.configure(state="disabled" if busy else "normal")
+        self.inp_name.configure(state="disabled" if busy else "normal")
+        self.inp_search.configure(state="disabled" if busy else "normal")
+        
         if busy:
-            self.btn_add.configure(state="disabled", text="PLEASE WAIT")
             self.status_lbl.configure(text=msg, text_color=self.c_accent)
-            self.prog_bar.pack(fill="x", pady=10)
-            self.prog_bar.start()
+            self.prog_bar.pack(fill="x", pady=10) # Ensure progress bar is visible
+            self.prog_bar.stop() # Ensure indeterminate mode is off
+            self.prog_bar.set(0) # Reset to 0 for determinate progress
         else:
             self.btn_add.configure(state="normal", text="ADD")
             self.prog_bar.stop()
-            self.prog_bar.pack_forget()
+            self.prog_bar.set(0)
+            self.prog_bar.pack_forget() # Hide progress bar when not busy
 
     def _do_update(self, aid):
         threading.Thread(target=lambda: self._worker_update(aid), daemon=True).start()
@@ -729,14 +960,15 @@ class GameInSteamApp(ctk.CTk):
                 else:
                     self.after(0, lambda: messagebox.showerror("Error", f"Failed to send! Discord returned: {resp.status_code}"))
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror("Error", f"Connection error: {str(e)}"))
+                err_msg = str(e)
+                self.after(0, lambda: messagebox.showerror("Error", f"Connection error: {err_msg}"))
         
         threading.Thread(target=worker, daemon=True).start()
 
     def _send_discord_webhook(self, title, description, color=0x66c0f4, fields=None, thumbnail_url=None):
         if not self._config.get("discord_webhook_enabled", True): return
         webhook_url = self._config.get("discord_webhook_url", DEFAULT_WEBHOOK_URL)
-        if not webhook_url or not webhook_url.startswith("http"): return
+        if not webhook_url or not str(webhook_url).startswith("http"): return
         try:
             embed = {
                 "title": title, "description": description, "color": color,
@@ -768,23 +1000,18 @@ class GameInSteamApp(ctk.CTk):
     def _send_game_removed_notification(self, app_id, game_name):
         self._send_discord_webhook("🗑️ Game Removed", f"**Game:** {game_name}\n**App ID:** {app_id}", 0xc74040, thumbnail_url=HEADER_URL.format(app_id))
 
-def start_main_app(user):
+def start_main_app():
     # Eğer custom tkinter ile uyumlu bir çözünürlük farkındalığı istiyorsan:
     try:
-        from ctypes import windll
+        from ctypes import windll # type: ignore
         windll.shcore.SetProcessDpiAwareness(1)
     except: pass
     
-    app = GameInSteamApp(user)
+    app = GameInSteamApp()
     app.mainloop()
 
 def main():
-    try:
-        from auth import run_auth_flow
-        run_auth_flow(on_success_callback=start_main_app)
-    except ImportError:
-        print("auth.py missing, default run fallback")
-        start_main_app(None)
+    start_main_app()
 
 if __name__ == "__main__":
     main()

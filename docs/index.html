@@ -1301,8 +1301,7 @@
                 <a href="#how" class="desktop" data-i18n="nav_how">How It Works</a>
                 <a href="pricing.html" class="desktop" data-i18n="nav_pricing">Pricing</a>
                 <a href="#security" class="desktop" data-i18n="nav_security">Security</a>
-                <a href="auth.html" id="auth-link" class="btn btn-secondary" style="padding: 6px 16px; font-size: 13px;"
-                    data-i18n="nav_auth">Login</a>
+
                 <div class="lang-switch">
                     <button class="lang-btn active" onclick="setLang('en')">EN</button>
                     <button class="lang-btn" onclick="setLang('de')">DE</button>
@@ -1550,8 +1549,8 @@
                 The Aura Evolution is Coming.</h2>
             <p data-i18n="cta_desc"
                 style="font-size: 20px; color: var(--text-secondary); max-width: 650px; margin-left: auto; margin-right: auto; line-height: 1.6;">
-                We are currently building the ultimate Stripe-integrated premium experience. Signups and downloads will
-                open exclusively for our Pro members very soon.</p>
+                We are building the ultimate premium experience. Signups and downloads will
+                be available very soon. Thank you for your patience!</p>
         </div>
     </section>
 
@@ -1569,199 +1568,270 @@
             WITH VALVE CORP.</p>
     </footer>
 
-    <script>
-        // ═══════════ AUTH CHECK ═══════════
-        async function checkAuth() {
-            if (!supabaseClient) return;
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            const authLink = document.getElementById('auth-link');
-            if (session) {
-                authLink.href = 'profile.html';
-                authLink.setAttribute('data-i18n', 'nav_profile');
-                // Mevcut dildeki karşılığını i18n sözlüğünden al
-                const dict = T[currentLang] || T.en;
-                authLink.textContent = dict['nav_profile'] || 'Profile';
-            } else {
-                authLink.href = 'auth.html';
-                authLink.setAttribute('data-i18n', 'nav_auth');
-                const dict = T[currentLang] || T.en;
-                authLink.textContent = dict['nav_auth'] || 'Login';
-            }
-        }
 
-        // ═══════════ i18n ═══════════
-        const T = {
-            en: {
-                nav_features: "Features", nav_how: "How It Works", nav_pricing: "Pricing", nav_security: "Security", nav_compare: "Compare",
-                nav_auth: "Login", nav_profile: "Profile",
-                hero_badge: "Fast & Trusted",
-                hero_title: 'Your Steam Library, <span class="accent">Unlimited.</span>',
-                hero_desc: "Add any game to your Steam library with a single click. Fully automated — no manual file editing, no technical knowledge required.",
-                hero_cta: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download for Windows',
-                hero_learn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> Learn More',
-                app_name_label: "Name", app_add_btn: "&#9889; Add Game",
-                stat_click: "Click to Add", stat_speed: "Average Speed", stat_auto: "Fully Automated", stat_safe: "Virus Scan Clean",
-                feat_tag: "Features", feat_title: "Everything You Need. Nothing You Don't.", feat_desc: "GameInSteam combines powerful automation with a sleek interface, making game management effortless.",
-                f1_title: "One-Click Adding", f1_desc: "Enter an App ID, click the button — done. No manual file copying, no terminal commands, no headaches.",
-                f2_title: "Lightning Fast", f2_desc: "The entire process takes about 15 seconds. Enter an ID, sit back, and your game is ready in your Steam library.",
-                f3_title: "Game Management", f3_desc: "View all your added games with cover art, update to latest versions, or remove them cleanly — all from one panel.",
-                f4_title: "Steam-Themed UI", f4_desc: "A beautiful, modern interface that feels native to Steam. Dark theme, smooth animations, and in-app notifications.",
-                f5_title: "Live Progress Bar", f5_desc: "Track every step in real-time with a percentage-based progress bar. Always know exactly what's happening.",
-                f6_title: "Smart Validation", f6_desc: "Every downloaded file is verified against Cloudflare blocks and corruption before being placed — protecting your Steam installation.",
-                how_tag: "How It Works", how_title: "Three Steps. That's It.", how_desc: "No setup guides, no tutorials needed. GameInSteam handles the entire process automatically.",
-                s1_title: "Enter App ID", s1_desc: "Copy the App ID from any Steam store page and paste it into GameInSteam.",
-                s2_title: "Click Add", s2_desc: "Hit the button. GameInSteam handles everything in the background automatically.",
-                s3_title: "Play", s3_desc: "Steam restarts with the game in your library. Install and enjoy.",
-                sec_tag: "Security", sec_title: "100% Clean. Zero Threats.", sec_desc: "GameInSteam is verified clean by industry-leading antivirus engines. Your safety is our priority.",
-                vt_of: "/72 ✓", vt_clean: "All Engines Clean", vt_info: "Scanned by 72 antivirus engines.<br>All returned clean.",
-                vt_more: "+61 more engines",
-                sec_why_title: "Why Is It Safe?",
-                sec_why_1: '🔓 <strong>Trusted Software</strong> — Built by real developers with a focus on security. No hidden code, no backdoors.',
-                sec_why_2: '🛡️ <strong>VirusTotal Verified</strong> — Scanned by 72+ antivirus engines including Kaspersky, Norton, ESET, and Windows Defender. Zero detections.',
-                sec_why_3: '📦 <strong>No Hidden Processes</strong> — The app only modifies Steam config files. No background miners, no telemetry, no data collection.',
-                sec_why_4: '🔄 <strong>Transparent Operations</strong> — Every step is shown in real-time with a progress bar. You see exactly what\'s happening at all times.',
-                badge_vt: "VirusTotal 72/72 Clean", badge_os: "Trusted", badge_no_mal: "No Malware", badge_no_track: "No Tracking",
-                comp_tag: "Comparison", comp_title: "Why GameInSteam?", comp_desc: "See how we stack up against alternative methods and tools.", comp_feature: "Feature", comp_manual: "Manual Method",
-                c1: "One-Click Game Adding", c2: "Modern GUI", c3: "Auto Depot Key Download", c4: "Game Management (Update/Remove)",
-                c5: "Game Cover Art & Library View", c6: "Auto Steam Restart & Cache Clear", c7: "Real-Time Progress Tracking", c8: "Beginner Friendly", c9: "Adds Games by App ID Only", c10: "DLC Unlock Support",
-                cta_title: "Ready to Unlock Your Library?", cta_desc: "Download GameInSteam now and add your first game in under 30 seconds.",
-                cta_btn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download v4.5 — Windows',
-                footer: "Not affiliated with Valve or Steam."
-            },
-            de: {
-                nav_features: "Funktionen", nav_how: "So funktioniert's", nav_pricing: "Preise", nav_security: "Sicherheit", nav_compare: "Vergleich",
-                nav_auth: "Anmelden", nav_profile: "Profil",
-                hero_badge: "Schnell & Vertrauenswürdig",
-                hero_title: 'Deine Steam-Bibliothek, <span class="accent">Grenzenlos.</span>',
-                hero_desc: "Füge jedes Spiel mit einem Klick zu deiner Steam-Bibliothek hinzu. Vollautomatisch — kein manuelles Bearbeiten, keine technischen Vorkenntnisse nötig.",
-                hero_cta: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download für Windows',
-                hero_learn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> Mehr erfahren',
-                app_name_label: "Name", app_add_btn: "&#9889; Spiel hinzufügen",
-                stat_click: "Klick zum Hinzufügen", stat_speed: "Durchschnitt", stat_auto: "Vollautomatisch", stat_safe: "Virenscan Sauber",
-                feat_tag: "Funktionen", feat_title: "Alles was du brauchst. Nichts was du nicht brauchst.", feat_desc: "GameInSteam kombiniert leistungsstarke Automatisierung mit einer eleganten Oberfläche.",
-                f1_title: "Ein-Klick Hinzufügen", f1_desc: "App ID eingeben, Button klicken — fertig. Kein manuelles Kopieren, keine Terminal-Befehle.",
-                f2_title: "Blitzschnell", f2_desc: "Der gesamte Vorgang dauert etwa 15 Sekunden. ID eingeben, zurücklehnen — dein Spiel ist in der Steam-Bibliothek.",
-                f3_title: "Spielverwaltung", f3_desc: "Alle hinzugefügten Spiele mit Cover anzeigen, aktualisieren oder sauber entfernen — alles in einem Panel.",
-                f4_title: "Steam-Design", f4_desc: "Eine moderne Oberfläche, die sich nativ in Steam anfühlt. Dunkles Theme, flüssige Animationen und In-App Benachrichtigungen.",
-                f5_title: "Live-Fortschrittsbalken", f5_desc: "Verfolge jeden Schritt in Echtzeit mit einem prozentualen Fortschrittsbalken. Du weißt immer genau, was passiert.",
-                f6_title: "Intelligente Validierung", f6_desc: "Jede heruntergeladene Datei wird gegen Cloudflare-Blocks und Korruption geprüft — schützt deine Steam-Installation.",
-                how_tag: "So funktioniert's", how_title: "Drei Schritte. Das war's.", how_desc: "Keine Anleitungen, keine Tutorials nötig. GameInSteam erledigt den gesamten Prozess automatisch.",
-                s1_title: "App ID eingeben", s1_desc: "Kopiere die App ID von einer beliebigen Steam-Shopseite und füge sie ein.",
-                s2_title: "Klick auf Hinzufügen", s2_desc: "Drücke den Button. GameInSteam erledigt alles automatisch im Hintergrund.",
-                s3_title: "Spielen", s3_desc: "Steam startet neu mit dem Spiel in deiner Bibliothek. Installieren und genießen.",
-                sec_tag: "Sicherheit", sec_title: "100% Sauber. Keine Bedrohungen.", sec_desc: "GameInSteam wird von führenden Antivirus-Engines als sauber verifiziert. Deine Sicherheit hat Priorität.",
-                vt_of: "/72 ✓", vt_clean: "Alle Engines sauber", vt_info: "Von 72 Antivirus-Engines gescannt.<br>Alle ohne Befund.",
-                vt_more: "+61 weitere Engines",
-                sec_why_title: "Warum ist es sicher?",
-                sec_why_1: '🔓 <strong>Vertrauenswürdige Software</strong> — Von echten Entwicklern mit Fokus auf Sicherheit entwickelt. Kein versteckter Code, keine Hintertüren.',
-                sec_why_2: '🛡️ <strong>VirusTotal Verifiziert</strong> — Von 72+ Antivirus-Engines gescannt, darunter Kaspersky, Norton, ESET und Windows Defender. Null Erkennungen.',
-                sec_why_3: '📦 <strong>Keine versteckten Prozesse</strong> — Die App ändert nur Steam-Konfigurationsdateien. Keine Hintergrund-Miner, keine Telemetrie, keine Datenerfassung.',
-                sec_why_4: '🔄 <strong>Transparente Vorgänge</strong> — Jeder Schritt wird in Echtzeit mit einem Fortschrittsbalken angezeigt. Du siehst jederzeit genau, was passiert.',
-                badge_vt: "VirusTotal 72/72 Sauber", badge_os: "Vertrauenswürdig", badge_no_mal: "Keine Malware", badge_no_track: "Kein Tracking",
-                comp_tag: "Vergleich", comp_title: "Warum GameInSteam?", comp_desc: "Vergleiche uns mit alternativen Methoden und Tools.", comp_feature: "Funktion", comp_manual: "Manuelle Methode",
-                c1: "Ein-Klick Hinzufügen", c2: "Moderne Oberfläche", c3: "Auto Depot-Key Download", c4: "Spielverwaltung (Update/Entfernen)",
-                c5: "Spiel-Cover & Bibliotheksansicht", c6: "Auto Steam-Neustart & Cache löschen", c7: "Echtzeit-Fortschritt", c8: "Anfängerfreundlich", c9: "Spiele nur per App ID", c10: "DLC-Freischaltung",
-                cta_title: "Bereit, deine Bibliothek freizuschalten?", cta_desc: "Lade GameInSteam jetzt herunter und füge dein erstes Spiel in unter 30 Sekunden hinzu.",
-                cta_btn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download v4.5 — Windows',
-                footer: "Nicht mit Valve oder Steam verbunden."
-            },
-            tr: {
-                nav_features: "Özellikler", nav_how: "Nasıl Çalışır", nav_pricing: "Fiyatlandırma", nav_security: "Güvenlik", nav_compare: "Karşılaştırma",
-                nav_auth: "Giriş Yap", nav_profile: "Profil",
-                hero_badge: "Hızlı & Güvenilir",
-                hero_title: 'Steam Kütüphanen, <span class="accent">Sınırsız.</span>',
-                hero_desc: "Tek tıkla istediğin oyunu Steam kütüphanene ekle. Tamamen otomatik — dosya düzenleme yok, teknik bilgi gerekmiyor.",
-                hero_cta: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Windows için İndir',
-                hero_learn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> Daha Fazla',
-                app_name_label: "Oyun Adı", app_add_btn: "&#9889; Oyunu Ekle",
-                stat_click: "Tek Tıkla Ekle", stat_speed: "Ortalama Hız", stat_auto: "Tamamen Otomatik", stat_safe: "Virüs Taraması Temiz",
-                feat_tag: "Özellikler", feat_title: "İhtiyacın Olan Her Şey. Fazlası Değil.", feat_desc: "GameInSteam güçlü otomasyonu şık bir arayüzle birleştirerek oyun yönetimini zahmetsiz hale getirir.",
-                f1_title: "Tek Tıkla Ekleme", f1_desc: "App ID gir, butona bas — bitti. Manuel dosya kopyalama yok, terminal komutları yok, baş ağrısı yok.",
-                f2_title: "Yıldırım Hızında", f2_desc: "Tüm süreç yaklaşık 15 saniye sürer. ID gir, arkana yaslan — oyunun Steam kütüphanende hazır.",
-                f3_title: "Oyun Yönetimi", f3_desc: "Eklenen tüm oyunları kapak görselleriyle görüntüle, en son sürümlere güncelle veya temizce kaldır — tek panelden.",
-                f4_title: "Steam Temalı Arayüz", f4_desc: "Steam'e özgü hissettiren güzel, modern bir arayüz. Koyu tema, akıcı animasyonlar ve uygulama içi bildirimler.",
-                f5_title: "Canlı İlerleme Çubuğu", f5_desc: "Her adımı yüzdelik ilerleme çubuğuyla gerçek zamanlı takip et. Ne olduğunu her zaman tam olarak bil.",
-                f6_title: "Akıllı Doğrulama", f6_desc: "İndirilen her dosya Cloudflare engellerine ve bozulmaya karşı doğrulanır — Steam kurulumunuzu korur.",
-                how_tag: "Nasıl Çalışır", how_title: "Üç Adım. Das war's.", how_desc: "Keine Anleitungen, keine Tutorials nötig. GameInSteam erledigt den gesamten Prozess automatisch.",
-                s1_title: "App ID Gir", s1_desc: "Herhangi bir Steam mağaza sayfasından App ID'yi kopyala ve GameInSteam'e yapıştır.",
-                s2_title: "Ekle'ye Bas", s2_desc: "Butona bas. GameInSteam her şeyi arka planda otomatik olarak halleder.",
-                s3_title: "Oyna", s3_desc: "Steam oyun kütüphanende oyunla birlikte yeniden başlar. Kur ve keyfini çıkar.",
-                sec_tag: "Security", sec_title: "100% Temiz. Sıfır Tehdit.", sec_desc: "GameInSteam sektör lideri antivirüs motorları tarafından temiz olarak doğrulanmıştır. Güvenliğin bizim önceliğimiz.",
-                vt_of: "/72 ✓", vt_clean: "Tüm Motorlar Temiz", vt_info: "72 antivirüs motoru tarafından tarandı.<br>Tümü temiz döndü.",
-                vt_more: "+61 motor daha",
-                sec_why_title: "Neden Güvenli?",
-                sec_why_1: '🔓 <strong>Güvenilir Yazılım</strong> — Güvenliğe odaklanmış gerçek geliştiriciler tarafından yapıldı. Gizli kod yok, arka kapı yok.',
-                sec_why_2: '🛡️ <strong>VirusTotal Onaylı</strong> — Kaspersky, Norton, ESET ve Windows Defender dahil 72+ antivirüs motoru tarafından tarandı. Sıfır tespit.',
-                sec_why_3: '📦 <strong>Gizli İşlem Yok</strong> — Uygulama sadece Steam yapılandırma dosyalarını değiştirir. Arka plan madencisi yok, veri toplama yok, takip yok.',
-                sec_why_4: '🔄 <strong>Şeffaf İşlemler</strong> — Her adım ilerleme çubuğuyla gerçek zamanlı olarak gösterilir. Ne olduğunu her zaman görürsün.',
-                badge_vt: "VirusTotal 72/72 Temiz", badge_os: "Güvenilir", badge_no_mal: "Zararlı Yazılım Yok", badge_no_track: "Takip Yok",
-                comp_tag: "Karşılaştırma", comp_title: "Neden GameInSteam?", comp_desc: "Alternatif yöntemler ve araçlarla nasıl karşılaştırıldığımızı görün.", comp_feature: "Özellik", comp_manual: "Manuel Yöntem",
-                c1: "Tek Tıkla Oyun Ekleme", c2: "Modern Arayüz", c3: "Otomatik Depot Anahtar İndirme", c4: "Oyun Yönetimi (Güncelle/Kaldır)",
-                c5: "Oyun Kapak Görseli & Kütüphane", c6: "Otomatik Steam Yeniden Başlatma & Önbellek Temizleme", c7: "Gerçek Zamanlı İlerleme Takibi", c8: "Yeni Başlayanlar İçin Uygun", c9: "Sadece App ID ile Oyun Ekleme", c10: "DLC Kilit Açma Desteği",
-                cta_title: "Kütüphaneni Açmaya Hazır Mısın?", cta_desc: "GameInSteam'i şimdi indir ve ilk oyununu 30 saniyede ekle.",
-                cta_btn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> v4.5 İndir — Windows',
-                footer: "Valve veya Steam ile bağlantılı değildir."
-            }
-        };
+    const T = {
+    en: {
+    nav_features: "Features", nav_how: "How It Works", nav_pricing: "Pricing", nav_security: "Security", nav_compare:
+    "Compare",
+    nav_auth: "Login", nav_profile: "Profile",
+    hero_badge: "Fast & Trusted",
+    hero_title: 'Your Steam Library, <span class="accent">Unlimited.</span>',
+    hero_desc: "Add any game to your Steam library with a single click. Fully automated — no manual file editing, no
+    technical knowledge required.",
+    hero_cta: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+    </svg> Download for Windows',
+    hero_learn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 16v-4" />
+        <path d="M12 8h.01" />
+    </svg> Learn More',
+    app_name_label: "Name", app_add_btn: "&#9889; Add Game",
+    stat_click: "Click to Add", stat_speed: "Average Speed", stat_auto: "Fully Automated", stat_safe: "Virus Scan
+    Clean",
+    feat_tag: "Features", feat_title: "Everything You Need. Nothing You Don't.", feat_desc: "GameInSteam combines
+    powerful automation with a sleek interface, making game management effortless.",
+    f1_title: "One-Click Adding", f1_desc: "Enter an App ID, click the button — done. No manual file copying, no
+    terminal commands, no headaches.",
+    f2_title: "Lightning Fast", f2_desc: "The entire process takes about 15 seconds. Enter an ID, sit back, and your
+    game is ready in your Steam library.",
+    f3_title: "Game Management", f3_desc: "View all your added games with cover art, update to latest versions, or
+    remove them cleanly — all from one panel.",
+    f4_title: "Steam-Themed UI", f4_desc: "A beautiful, modern interface that feels native to Steam. Dark theme, smooth
+    animations, and in-app notifications.",
+    f5_title: "Live Progress Bar", f5_desc: "Track every step in real-time with a percentage-based progress bar. Always
+    know exactly what's happening.",
+    f6_title: "Smart Validation", f6_desc: "Every downloaded file is verified against Cloudflare blocks and corruption
+    before being placed — protecting your Steam installation.",
+    how_tag: "How It Works", how_title: "Three Steps. That's It.", how_desc: "No setup guides, no tutorials needed.
+    GameInSteam handles the entire process automatically.",
+    s1_title: "Enter App ID", s1_desc: "Copy the App ID from any Steam store page and paste it into GameInSteam.",
+    s2_title: "Click Add", s2_desc: "Hit the button. GameInSteam handles everything in the background automatically.",
+    s3_title: "Play", s3_desc: "Steam restarts with the game in your library. Install and enjoy.",
+    sec_tag: "Security", sec_title: "100% Clean. Zero Threats.", sec_desc: "GameInSteam is verified clean by
+    industry-leading antivirus engines. Your safety is our priority.",
+    vt_of: "/72 ✓", vt_clean: "All Engines Clean", vt_info: "Scanned by 72 antivirus engines.<br>All returned clean.",
+    vt_more: "+61 more engines",
+    sec_why_title: "Why Is It Safe?",
+    sec_why_1: '🔓 <strong>Trusted Software</strong> — Built by real developers with a focus on security. No hidden
+    code, no backdoors.',
+    sec_why_2: '🛡️ <strong>VirusTotal Verified</strong> — Scanned by 72+ antivirus engines including Kaspersky, Norton,
+    ESET, and Windows Defender. Zero detections.',
+    sec_why_3: '📦 <strong>No Hidden Processes</strong> — The app only modifies Steam config files. No background
+    miners, no telemetry, no data collection.',
+    sec_why_4: '🔄 <strong>Transparent Operations</strong> — Every step is shown in real-time with a progress bar. You
+    see exactly what\'s happening at all times.',
+    badge_vt: "VirusTotal 72/72 Clean", badge_os: "Trusted", badge_no_mal: "No Malware", badge_no_track: "No Tracking",
+    comp_tag: "Comparison", comp_title: "Why GameInSteam?", comp_desc: "See how we stack up against alternative methods
+    and tools.", comp_feature: "Feature", comp_manual: "Manual Method",
+    c1: "One-Click Game Adding", c2: "Modern GUI", c3: "Auto Depot Key Download", c4: "Game Management (Update/Remove)",
+    c5: "Game Cover Art & Library View", c6: "Auto Steam Restart & Cache Clear", c7: "Real-Time Progress Tracking", c8:
+    "Beginner Friendly", c9: "Adds Games by App ID Only", c10: "DLC Unlock Support",
+    cta_title: "Ready to Unlock Your Library?", cta_desc: "Download GameInSteam now and add your first game in under 30
+    seconds.",
+    cta_btn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+    </svg> Download v4.5 — Windows',
+    footer: "Not affiliated with Valve or Steam."
+    },
+    de: {
+    nav_features: "Funktionen", nav_how: "So funktioniert's", nav_pricing: "Preise", nav_security: "Sicherheit",
+    nav_compare: "Vergleich",
+    nav_auth: "Anmelden", nav_profile: "Profil",
+    hero_badge: "Schnell & Vertrauenswürdig",
+    hero_title: 'Deine Steam-Bibliothek, <span class="accent">Grenzenlos.</span>',
+    hero_desc: "Füge jedes Spiel mit einem Klick zu deiner Steam-Bibliothek hinzu. Vollautomatisch — kein manuelles
+    Bearbeiten, keine technischen Vorkenntnisse nötig.",
+    hero_cta: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+    </svg> Download für Windows',
+    hero_learn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 16v-4" />
+        <path d="M12 8h.01" />
+    </svg> Mehr erfahren',
+    app_name_label: "Name", app_add_btn: "&#9889; Spiel hinzufügen",
+    stat_click: "Klick zum Hinzufügen", stat_speed: "Durchschnitt", stat_auto: "Vollautomatisch", stat_safe: "Virenscan
+    Sauber",
+    feat_tag: "Funktionen", feat_title: "Alles was du brauchst. Nichts was du nicht brauchst.", feat_desc: "GameInSteam
+    kombiniert leistungsstarke Automatisierung mit einer eleganten Oberfläche.",
+    f1_title: "Ein-Klick Hinzufügen", f1_desc: "App ID eingeben, Button klicken — fertig. Kein manuelles Kopieren, keine
+    Terminal-Befehle.",
+    f2_title: "Blitzschnell", f2_desc: "Der gesamte Vorgang dauert etwa 15 Sekunden. ID eingeben, zurücklehnen — dein
+    Spiel ist in der Steam-Bibliothek.",
+    f3_title: "Spielverwaltung", f3_desc: "Alle hinzugefügten Spiele mit Cover anzeigen, aktualisieren oder sauber
+    entfernen — alles in einem Panel.",
+    f4_title: "Steam-Design", f4_desc: "Eine moderne Oberfläche, die sich nativ in Steam anfühlt. Dunkles Theme,
+    flüssige Animationen und In-App Benachrichtigungen.",
+    f5_title: "Live-Fortschrittsbalken", f5_desc: "Verfolge jeden Schritt in Echtzeit mit einem prozentualen
+    Fortschrittsbalken. Du weißt immer genau, was passiert.",
+    f6_title: "Intelligente Validierung", f6_desc: "Jede heruntergeladene Datei wird gegen Cloudflare-Blocks und
+    Korruption geprüft — schützt deine Steam-Installation.",
+    how_tag: "So funktioniert's", how_title: "Drei Schritte. Das war's.", how_desc: "Keine Anleitungen, keine Tutorials
+    nötig. GameInSteam erledigt den gesamten Prozess automatisch.",
+    s1_title: "App ID eingeben", s1_desc: "Kopiere die App ID von einer beliebigen Steam-Shopseite und füge sie ein.",
+    s2_title: "Klick auf Hinzufügen", s2_desc: "Drücke den Button. GameInSteam erledigt alles automatisch im
+    Hintergrund.",
+    s3_title: "Spielen", s3_desc: "Steam startet neu mit dem Spiel in deiner Bibliothek. Installieren und genießen.",
+    sec_tag: "Sicherheit", sec_title: "100% Sauber. Keine Bedrohungen.", sec_desc: "GameInSteam wird von führenden
+    Antivirus-Engines als sauber verifiziert. Deine Sicherheit hat Priorität.",
+    vt_of: "/72 ✓", vt_clean: "Alle Engines sauber", vt_info: "Von 72 Antivirus-Engines gescannt.<br>Alle ohne Befund.",
+    vt_more: "+61 weitere Engines",
+    sec_why_title: "Warum ist es sicher?",
+    sec_why_1: '🔓 <strong>Vertrauenswürdige Software</strong> — Von echten Entwicklern mit Fokus auf Sicherheit
+    entwickelt. Kein versteckter Code, keine Hintertüren.',
+    sec_why_2: '🛡️ <strong>VirusTotal Verifiziert</strong> — Von 72+ Antivirus-Engines gescannt, darunter Kaspersky,
+    Norton, ESET und Windows Defender. Null Erkennungen.',
+    sec_why_3: '📦 <strong>Keine versteckten Prozesse</strong> — Die App ändert nur Steam-Konfigurationsdateien. Keine
+    Hintergrund-Miner, keine Telemetrie, keine Datenerfassung.',
+    sec_why_4: '🔄 <strong>Transparente Vorgänge</strong> — Jeder Schritt wird in Echtzeit mit einem Fortschrittsbalken
+    angezeigt. Du siehst jederzeit genau, was passiert.',
+    badge_vt: "VirusTotal 72/72 Sauber", badge_os: "Vertrauenswürdig", badge_no_mal: "Keine Malware", badge_no_track:
+    "Kein Tracking",
+    comp_tag: "Vergleich", comp_title: "Warum GameInSteam?", comp_desc: "Vergleiche uns mit alternativen Methoden und
+    Tools.", comp_feature: "Funktion", comp_manual: "Manuelle Methode",
+    c1: "Ein-Klick Hinzufügen", c2: "Moderne Oberfläche", c3: "Auto Depot-Key Download", c4: "Spielverwaltung
+    (Update/Entfernen)",
+    c5: "Spiel-Cover & Bibliotheksansicht", c6: "Auto Steam-Neustart & Cache löschen", c7: "Echtzeit-Fortschritt", c8:
+    "Anfängerfreundlich", c9: "Spiele nur per App ID", c10: "DLC-Freischaltung",
+    cta_title: "Bereit, deine Bibliothek freizuschalten?", cta_desc: "Lade GameInSteam jetzt herunter und füge dein
+    erstes Spiel in unter 30 Sekunden hinzu.",
+    cta_btn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+    </svg> Download v4.5 — Windows',
+    footer: "Nicht mit Valve oder Steam verbunden."
+    },
+    tr: {
+    nav_features: "Özellikler", nav_how: "Nasıl Çalışır", nav_pricing: "Fiyatlandırma", nav_security: "Güvenlik",
+    nav_compare: "Karşılaştırma",
+    nav_auth: "Giriş Yap", nav_profile: "Profil",
+    hero_badge: "Hızlı & Güvenilir",
+    hero_title: 'Steam Kütüphanen, <span class="accent">Sınırsız.</span>',
+    hero_desc: "Tek tıkla istediğin oyunu Steam kütüphanene ekle. Tamamen otomatik — dosya düzenleme yok, teknik bilgi
+    gerekmiyor.",
+    hero_cta: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+    </svg> Windows için İndir',
+    hero_learn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 16v-4" />
+        <path d="M12 8h.01" />
+    </svg> Daha Fazla',
+    app_name_label: "Oyun Adı", app_add_btn: "&#9889; Oyunu Ekle",
+    stat_click: "Tek Tıkla Ekle", stat_speed: "Ortalama Hız", stat_auto: "Tamamen Otomatik", stat_safe: "Virüs Taraması
+    Temiz",
+    feat_tag: "Özellikler", feat_title: "İhtiyacın Olan Her Şey. Fazlası Değil.", feat_desc: "GameInSteam güçlü
+    otomasyonu şık bir arayüzle birleştirerek oyun yönetimini zahmetsiz hale getirir.",
+    f1_title: "Tek Tıkla Ekleme", f1_desc: "App ID gir, butona bas — bitti. Manuel dosya kopyalama yok, terminal
+    komutları yok, baş ağrısı yok.",
+    f2_title: "Yıldırım Hızında", f2_desc: "Tüm süreç yaklaşık 15 saniye sürer. ID gir, arkana yaslan — oyunun Steam
+    kütüphanende hazır.",
+    f3_title: "Oyun Yönetimi", f3_desc: "Eklenen tüm oyunları kapak görselleriyle görüntüle, en son sürümlere güncelle
+    veya temizce kaldır — tek panelden.",
+    f4_title: "Steam Temalı Arayüz", f4_desc: "Steam'e özgü hissettiren güzel, modern bir arayüz. Koyu tema, akıcı
+    animasyonlar ve uygulama içi bildirimler.",
+    f5_title: "Canlı İlerleme Çubuğu", f5_desc: "Her adımı yüzdelik ilerleme çubuğuyla gerçek zamanlı takip et. Ne
+    olduğunu her zaman tam olarak bil.",
+    f6_title: "Akıllı Doğrulama", f6_desc: "İndirilen her dosya Cloudflare engellerine ve bozulmaya karşı doğrulanır —
+    Steam kurulumunuzu korur.",
+    how_tag: "Nasıl Çalışır", how_title: "Üç Adım. Das war's.", how_desc: "Keine Anleitungen, keine Tutorials nötig.
+    GameInSteam erledigt den gesamten Prozess automatisch.",
+    s1_title: "App ID Gir", s1_desc: "Herhangi bir Steam mağaza sayfasından App ID'yi kopyala ve GameInSteam'e
+    yapıştır.",
+    s2_title: "Ekle'ye Bas", s2_desc: "Butona bas. GameInSteam her şeyi arka planda otomatik olarak halleder.",
+    s3_title: "Oyna", s3_desc: "Steam oyun kütüphanende oyunla birlikte yeniden başlar. Kur ve keyfini çıkar.",
+    sec_tag: "Security", sec_title: "100% Temiz. Sıfır Tehdit.", sec_desc: "GameInSteam sektör lideri antivirüs
+    motorları tarafından temiz olarak doğrulanmıştır. Güvenliğin bizim önceliğimiz.",
+    vt_of: "/72 ✓", vt_clean: "Tüm Motorlar Temiz", vt_info: "72 antivirüs motoru tarafından tarandı.<br>Tümü temiz
+    döndü.",
+    vt_more: "+61 motor daha",
+    sec_why_title: "Neden Güvenli?",
+    sec_why_1: '🔓 <strong>Güvenilir Yazılım</strong> — Güvenliğe odaklanmış gerçek geliştiriciler tarafından yapıldı.
+    Gizli kod yok, arka kapı yok.',
+    sec_why_2: '🛡️ <strong>VirusTotal Onaylı</strong> — Kaspersky, Norton, ESET ve Windows Defender dahil 72+ antivirüs
+    motoru tarafından tarandı. Sıfır tespit.',
+    sec_why_3: '📦 <strong>Gizli İşlem Yok</strong> — Uygulama sadece Steam yapılandırma dosyalarını değiştirir. Arka
+    plan madencisi yok, veri toplama yok, takip yok.',
+    sec_why_4: '🔄 <strong>Şeffaf İşlemler</strong> — Her adım ilerleme çubuğuyla gerçek zamanlı olarak gösterilir. Ne
+    olduğunu her zaman görürsün.',
+    badge_vt: "VirusTotal 72/72 Temiz", badge_os: "Güvenilir", badge_no_mal: "Zararlı Yazılım Yok", badge_no_track:
+    "Takip Yok",
+    comp_tag: "Karşılaştırma", comp_title: "Neden GameInSteam?", comp_desc: "Alternatif yöntemler ve araçlarla nasıl
+    karşılaştırıldığımızı görün.", comp_feature: "Özellik", comp_manual: "Manuel Yöntem",
+    c1: "Tek Tıkla Oyun Ekleme", c2: "Modern Arayüz", c3: "Otomatik Depot Anahtar İndirme", c4: "Oyun Yönetimi
+    (Güncelle/Kaldır)",
+    c5: "Oyun Kapak Görseli & Kütüphane", c6: "Otomatik Steam Yeniden Başlatma & Önbellek Temizleme", c7: "Gerçek
+    Zamanlı İlerleme Takibi", c8: "Yeni Başlayanlar İçin Uygun", c9: "Sadece App ID ile Oyun Ekleme", c10: "DLC Kilit
+    Açma Desteği",
+    cta_title: "Kütüphaneni Açmaya Hazır Mısın?", cta_desc: "GameInSteam'i şimdi indir ve ilk oyununu 30 saniyede
+    ekle.",
+    cta_btn: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+    </svg> v4.5 İndir — Windows',
+    footer: "Valve veya Steam ile bağlantılı değildir."
+    }
+    };
 
-        let currentLang = 'en';
+    let currentLang = 'en';
 
-        function setLang(lang) {
-            currentLang = lang;
-            document.documentElement.lang = lang;
-            // butonları güncelle
-            document.querySelectorAll('.lang-btn').forEach(b => {
-                b.classList.toggle('active', b.textContent.trim().toLowerCase() === lang);
-            });
-            // çevirileri uygula
-            const dict = T[lang] || T.en;
-            document.querySelectorAll('[data-i18n]').forEach(el => {
-                const key = el.getAttribute('data-i18n');
-                if (dict[key] !== undefined) el.innerHTML = dict[key];
-            });
-            checkAuth();
-        }
+    function setLang(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    // butonları güncelle
+    document.querySelectorAll('.lang-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.trim().toLowerCase() === lang);
+    });
+    // çevirileri uygula
+    const dict = T[lang] || T.en;
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (dict[key] !== undefined) el.innerHTML = dict[key];
+    });
 
-        // Initial check
-        checkAuth();
+    }
 
-        // Zenith Reveal System
-        function reveal() {
-            var reveals = document.querySelectorAll(".reveal");
-            for (var i = 0; i < reveals.length; i++) {
-                var windowHeight = window.innerHeight;
-                var elementTop = reveals[i].getBoundingClientRect().top;
-                var elementVisible = 150;
-                if (elementTop < windowHeight - elementVisible) {
-                    reveals[i].classList.add("active");
-                }
-            }
-        }
-        window.addEventListener("scroll", reveal);
-        // Initial check
-        window.addEventListener("load", reveal);
+    // Initial check
 
-        // Pointer Glow Logic
-        const glow = document.getElementById('pointer-glow');
-        window.addEventListener('mousemove', e => {
-            glow.style.left = e.clientX + 'px';
-            glow.style.top = e.clientY + 'px';
+
+    // Zenith Reveal System
+    function reveal() {
+    var reveals = document.querySelectorAll(".reveal");
+    for (var i = 0; i < reveals.length; i++) { var windowHeight=window.innerHeight; var
+        elementTop=reveals[i].getBoundingClientRect().top; var elementVisible=150; if (elementTop < windowHeight -
+        elementVisible) { reveals[i].classList.add("active"); } } } window.addEventListener("scroll", reveal); //
+        Initial check window.addEventListener("load", reveal); // Pointer Glow Logic const
+        glow=document.getElementById('pointer-glow'); window.addEventListener('mousemove', e=> {
+        glow.style.left = e.clientX + 'px';
+        glow.style.top = e.clientY + 'px';
         });
 
         // Sticky Nav Logic
         window.addEventListener('scroll', () => {
-            const nav = document.getElementById('nav');
-            if (window.scrollY > 50) nav.classList.add('scrolled');
-            else nav.classList.remove('scrolled');
+        const nav = document.getElementById('nav');
+        if (window.scrollY > 50) nav.classList.add('scrolled');
+        else nav.classList.remove('scrolled');
         });
 
         // Initialize i18n
         function changeLang(lang) {
-            document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.innerText.toLowerCase() === lang));
-            // Placeholder for translation logic
-            console.log("Switching to", lang);
+        document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.innerText.toLowerCase()
+        === lang));
+        // Placeholder for translation logic
+        console.log("Switching to", lang);
         }
-    </script>
+        </script>
 </body>
 
 </html>
