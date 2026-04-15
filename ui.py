@@ -102,7 +102,6 @@ class GameInSteamApp(ctk.CTk):
         self._name_cache:          dict[str,str]  = {}
         self._img_cache:           dict[str,Any]  = {}
         self._crack_cache:         dict[str,Any]  = {}
-        self._avail_img_cache:     dict[str,Any]  = {}
         self._available_games:     list[str]       = []
         self._available_loaded                      = False
         self._busy                                  = False
@@ -353,12 +352,6 @@ class GameInSteamApp(ctk.CTk):
                          text_color=self.c_text_dim).pack(anchor="w", pady=(0,14))
         else:
             ctk.CTkFrame(parent, height=14, fg_color="transparent").pack()
-
-    def _pill(self, parent, text: str, color: str, bg: str) -> ctk.CTkLabel:
-        return ctk.CTkLabel(parent, text=text,
-                            font=ctk.CTkFont("Segoe UI", 10, weight="bold"),
-                            fg_color=bg, text_color=color,
-                            corner_radius=8, padx=8, pady=2)
 
     def _ghost_btn(self, parent, text: str, cmd, width: int = 90) -> ctk.CTkButton:
         return ctk.CTkButton(parent, text=text, width=width, height=32,
@@ -894,7 +887,6 @@ class GameInSteamApp(ctk.CTk):
     def _refresh_available_games(self):
         self._available_loaded = False
         self._available_games  = []
-        self._avail_img_cache  = {}
         self._load_available_games()
 
     def _worker_fetch_available(self):
@@ -963,8 +955,11 @@ class GameInSteamApp(ctk.CTk):
 
         threading.Thread(target=self._fetch_avail_name,
                          args=(aid,name_lbl,card), daemon=True).start()
-        threading.Thread(target=self._fetch_avail_img,
-                         args=(aid,img_lbl), daemon=True).start()
+        if aid not in self._img_cache:
+            threading.Thread(target=self._fetch_img,
+                             args=(aid,img_lbl), daemon=True).start()
+        else:
+            img_lbl.configure(image=self._img_cache[aid])
 
     def _fetch_avail_name(self, aid, lbl, card):
         name = self._name_cache.get(aid) or get_game_name_from_steam(aid)
@@ -972,21 +967,6 @@ class GameInSteamApp(ctk.CTk):
             self._name_cache[aid] = name
             card._name_str        = name.lower()
             self.after(0, lambda: lbl.configure(text=name) if lbl.winfo_exists() else None)
-
-    def _fetch_avail_img(self, aid, lbl):
-        if aid in self._avail_img_cache:
-            photo = self._avail_img_cache[aid]
-            self.after(0, lambda: lbl.configure(image=photo) if lbl.winfo_exists() else None)
-            return
-        try:
-            r = requests.get(HEADER_URL.format(aid), timeout=6)
-            if r.status_code == 200:
-                img   = Image.open(io.BytesIO(r.content)).resize((IMG_W,IMG_H), Image.LANCZOS)
-                photo = ImageTk.PhotoImage(img)
-                self._avail_img_cache[aid] = photo
-                self.after(0, lambda: lbl.configure(image=photo) if lbl.winfo_exists() else None)
-        except Exception:
-            pass
 
     def _filter_available(self, *args):
         q = self.avail_search_var.get().strip().lower()
@@ -1364,17 +1344,13 @@ class GameInSteamApp(ctk.CTk):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-def start_main_app():
+def main():
     try:
         from ctypes import windll  # type: ignore
         windll.shcore.SetProcessDpiAwareness(1)
     except Exception:
         pass
     GameInSteamApp().mainloop()
-
-
-def main():
-    start_main_app()
 
 
 if __name__ == "__main__":

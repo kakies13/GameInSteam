@@ -1,0 +1,16 @@
+chore: dead code temizligi
+
+steam_handler.py:
+- import re kaldirildi (artik kullanilmiyor)
+- import glob ust seviyeye tasindi
+- DEPOTCACHE_DIR sabiti ve setup_dirs icindeki depotcache olusturma kaldirildi
+- list_added_games: regex analizi, dlc_count, has_depot_keys, lua_size,
+  manifest_count hesaplamalari ve dict alanlari kaldirildi (hicbiri ui.py'de kullanilmiyordu)
+
+ui.py:
+- _pill() metodu kaldirildi (hic cagrilmiyordu)
+- _avail_img_cache ve _fetch_avail_img kaldirildi; artik _img_cache paylasiliyor
+- start_main_app() wrapper kaldirildi, main() icine inline edildi
+
+updater.py:
+- Fallback versiyon "4.5" -> "5.0" duzeltildi

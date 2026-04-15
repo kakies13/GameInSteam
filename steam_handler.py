@@ -1,5 +1,5 @@
 import os
-import re
+import glob
 import time
 import zipfile
 import shutil
@@ -11,7 +11,6 @@ import requests
 STEAM_PATH = r"C:\Program Files (x86)\Steam"
 
 STPLUGIN_DIR = os.path.join(STEAM_PATH, "config", "stplug-in")
-DEPOTCACHE_DIR = os.path.join(STEAM_PATH, "config", "depotcache")
 
 STEAM_API_URL = "https://store.steampowered.com/api/appdetails"
 GAMELIST_BASE_URL = "https://raw.githubusercontent.com/kakies13/gamelist/main"
@@ -40,9 +39,8 @@ def check_stplugin_system():
 
 
 def setup_dirs():
-    """stplug-in ve depotcache dizinlerini oluşturur."""
+    """stplug-in dizinini oluşturur."""
     os.makedirs(STPLUGIN_DIR, exist_ok=True)
-    os.makedirs(DEPOTCACHE_DIR, exist_ok=True)
 
 
 # =============================================================================
@@ -252,49 +250,18 @@ def list_added_games():
     """
     stplug-in dizinindeki lua dosyalarını tarayarak eklenmiş oyunları listeler.
 
-    Returns: list of dict
+    Returns: list of dict with keys: app_id, mtime
     """
-    import glob
     games = []
     if not os.path.isdir(STPLUGIN_DIR):
         return games
 
     for lua_file in sorted(glob.glob(os.path.join(STPLUGIN_DIR, "*.lua"))):
-        basename = os.path.basename(lua_file)
-        name_part = os.path.splitext(basename)[0]
-
+        name_part = os.path.splitext(os.path.basename(lua_file))[0]
         if not name_part.isdigit():
             continue
-
-        app_id = name_part
-        lua_size = os.path.getsize(lua_file)
-
-        has_depot_keys = False
-        dlc_count = 0
-        try:
-            with open(lua_file, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            depot_matches = re.findall(r'addappid\(\d+\s*,\s*\d+\s*,\s*"', content)
-            has_depot_keys = len(depot_matches) > 0
-            all_ids = re.findall(r"addappid\((\d+)", content)
-            dlc_count = max(0, len(all_ids) - 1)
-        except Exception:
-            pass
-
-        manifest_count = 0
-        if os.path.isdir(DEPOTCACHE_DIR):
-            for f in os.listdir(DEPOTCACHE_DIR):
-                if f.endswith(".manifest"):
-                    manifest_count += 1
-
         games.append({
-            "app_id": app_id,
-            "name": "",
-            "lua_file": lua_file,
-            "lua_size": lua_size,
-            "dlc_count": dlc_count,
-            "manifest_count": manifest_count,
-            "has_depot_keys": has_depot_keys,
+            "app_id": name_part,
             "mtime": os.path.getmtime(lua_file),
         })
 

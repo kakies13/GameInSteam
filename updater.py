@@ -33,7 +33,7 @@ def _get_version():
                     return version
     except Exception:
         pass
-    return "4.5"  # Default
+    return "5.0"  # Default
 
 CURRENT_VERSION = _get_version()
 
