@@ -1,4 +1,5 @@
 import os
+import sys
 import glob
 import time
 import zipfile
@@ -8,9 +9,79 @@ import tempfile
 import requests
 
 # --- AYARLAR ---
-STEAM_PATH = r"C:\Program Files (x86)\Steam"
+_DEFAULT_STEAM = r"C:\Program Files (x86)\Steam"
+MIN_XINPUT_DLL_SIZE = 200_000
+XINPUT_DLL_NAME = "xinput1_4.dll"
 
-STPLUGIN_DIR = os.path.join(STEAM_PATH, "config", "stplug-in")
+
+def get_steam_path() -> str:
+    """Steam kurulum dizinini registry'den okur, yoksa varsayilan yolu kullanir."""
+    try:
+        import winreg
+
+        candidates = (
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam"),
+            (winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam"),
+        )
+        for root, subkey in candidates:
+            try:
+                with winreg.OpenKey(root, subkey) as key:
+                    path, _ = winreg.QueryValueEx(key, "InstallPath")
+                    if path and os.path.isdir(path):
+                        return path
+            except OSError:
+                continue
+    except Exception:
+        pass
+    return _DEFAULT_STEAM
+
+
+def get_stplugin_dir() -> str:
+    return os.path.join(get_steam_path(), "config", "stplug-in")
+
+
+def _bundled_xinput_path() -> str:
+    """Paketlenmis veya gelistirme ortamindaki xinput1_4.dll yolunu dondurur."""
+    if getattr(sys, "frozen", False):
+        for base in (getattr(sys, "_MEIPASS", None), os.path.dirname(sys.executable)):
+            if base:
+                candidate = os.path.join(base, XINPUT_DLL_NAME)
+                if os.path.isfile(candidate):
+                    return candidate
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), XINPUT_DLL_NAME)
+
+
+def install_stplugin_dll(force: bool = False) -> tuple[bool, str]:
+    """
+    xinput1_4.dll dosyasini Steam klasorune kopyalar (stplug-in sistemi).
+    ISS kurulumu veya uygulama acilisinda otomatik cagrilir.
+    """
+    steam_path = get_steam_path()
+    dest = os.path.join(steam_path, XINPUT_DLL_NAME)
+    src = _bundled_xinput_path()
+
+    if not os.path.isfile(src):
+        return False, f"Bundled {XINPUT_DLL_NAME} not found in application files."
+
+    if os.path.isfile(dest) and not force:
+        try:
+            if os.path.getsize(dest) > MIN_XINPUT_DLL_SIZE:
+                return True, f"{XINPUT_DLL_NAME} already installed in Steam."
+        except OSError:
+            pass
+
+    try:
+        shutil.copy2(src, dest)
+        size = os.path.getsize(dest)
+        return True, f"{XINPUT_DLL_NAME} installed to Steam ({size:,} bytes)."
+    except PermissionError:
+        return False, (
+            f"Could not write to {dest}.\n"
+            "Run GameInSteam as Administrator or reinstall with the setup installer."
+        )
+    except Exception as e:
+        return False, f"Failed to install {XINPUT_DLL_NAME}: {e}"
 
 STEAM_API_URL = "https://store.steampowered.com/api/appdetails"
 GAMELIST_BASE_URL = "https://raw.githubusercontent.com/kakies13/gamelist/main"
@@ -21,26 +92,24 @@ GAMELIST_BASE_URL = "https://raw.githubusercontent.com/kakies13/gamelist/main"
 # =============================================================================
 def check_stplugin_system():
     """Checks if the stplug-in system is installed."""
-    dll_path = os.path.join(STEAM_PATH, "xinput1_4.dll")
+    dll_path = os.path.join(get_steam_path(), XINPUT_DLL_NAME)
     if os.path.isfile(dll_path):
         size = os.path.getsize(dll_path)
-        if size > 200000:
-            return True, f"System active! xinput1_4.dll exists ({size:,} bytes)."
-        else:
-            return False, (
-                "xinput1_4.dll exists but looks like the system version.\n"
-                "Click the 'Download xinput1_4.dll' button in Toprak Steam Cracker."
-            )
+        if size > MIN_XINPUT_DLL_SIZE:
+            return True, f"System active! {XINPUT_DLL_NAME} exists ({size:,} bytes)."
+        return False, (
+            f"{XINPUT_DLL_NAME} exists but looks like the system version.\n"
+            "Reinstall GameInSteam or run as Administrator to replace it."
+        )
     return False, (
-        "xinput1_4.dll not found!\n"
-        "Open Toprak Steam Cracker and click the\n"
-        "'Download xinput1_4.dll' button in the top right."
+        f"{XINPUT_DLL_NAME} not found in Steam folder!\n"
+        "Restart GameInSteam or reinstall the setup to install it automatically."
     )
 
 
 def setup_dirs():
     """stplug-in dizinini oluşturur."""
-    os.makedirs(STPLUGIN_DIR, exist_ok=True)
+    os.makedirs(get_stplugin_dir(), exist_ok=True)
 
 
 # =============================================================================
@@ -48,7 +117,7 @@ def setup_dirs():
 # =============================================================================
 def clear_steam_cache():
     """Steam'in eski lisans verilerini zorla yenilemesi için cache temizler."""
-    cache_path = os.path.join(STEAM_PATH, "appcache")
+    cache_path = os.path.join(get_steam_path(), "appcache")
     if os.path.exists(cache_path):
         try:
             shutil.rmtree(cache_path)
@@ -69,7 +138,7 @@ def download_from_gamelist(app_id):
     """
     setup_dirs()
     zip_url = f"{GAMELIST_BASE_URL}/{app_id}.zip"
-    lua_dest = os.path.join(STPLUGIN_DIR, f"{app_id}.lua")
+    lua_dest = os.path.join(get_stplugin_dir(), f"{app_id}.lua")
 
     print(f"  📥 Downloading AppID {app_id} from gamelist repo...")
 
@@ -122,7 +191,7 @@ def download_from_gamelist(app_id):
 # =============================================================================
 def restart_steam():
     """Steam'i kapatıp yeniden başlatır."""
-    steam_exe = os.path.join(STEAM_PATH, "steam.exe")
+    steam_exe = os.path.join(get_steam_path(), "steam.exe")
 
     print("\n🔄 Restarting Steam...")
     subprocess.run(
@@ -165,6 +234,7 @@ def add_shortcut_from_manifest(app_id, app_name, on_progress=None, auto_restart=
             on_progress(pct, msg)
 
     _prog(0.05, "Checking system...")
+    install_stplugin_dll()
     system_ok, system_msg = check_stplugin_system()
     if not system_ok:
         print(f"⚠️ {system_msg}")
@@ -190,7 +260,7 @@ def add_shortcut_from_manifest(app_id, app_name, on_progress=None, auto_restart=
 
     _prog(0.70, "Cleaning up...")
 
-    old_acf = os.path.join(STEAM_PATH, "steamapps", f"appmanifest_{app_id}.acf")
+    old_acf = os.path.join(get_steam_path(), "steamapps", f"appmanifest_{app_id}.acf")
     if os.path.isfile(old_acf):
         try:
             os.remove(old_acf)
@@ -219,9 +289,8 @@ def add_shortcut_from_manifest(app_id, app_name, on_progress=None, auto_restart=
         )
     else:
         return True, (
-            f"Files placed but xinput1_4.dll is missing!\n\n"
-            f"Open Toprak Steam Cracker and click the\n"
-            f"'Download xinput1_4.dll' button in the top right.\n"
+            f"Files placed but {XINPUT_DLL_NAME} is missing!\n\n"
+            f"Reinstall GameInSteam setup or restart the app as Administrator.\n"
             f"Then restart Steam."
         )
 
@@ -253,10 +322,11 @@ def list_added_games():
     Returns: list of dict with keys: app_id, mtime
     """
     games = []
-    if not os.path.isdir(STPLUGIN_DIR):
+    stplugin_dir = get_stplugin_dir()
+    if not os.path.isdir(stplugin_dir):
         return games
 
-    for lua_file in sorted(glob.glob(os.path.join(STPLUGIN_DIR, "*.lua"))):
+    for lua_file in sorted(glob.glob(os.path.join(stplugin_dir, "*.lua"))):
         name_part = os.path.splitext(os.path.basename(lua_file))[0]
         if not name_part.isdigit():
             continue
@@ -288,12 +358,12 @@ def remove_game(app_id):
     app_id = str(app_id)
     removed = []
 
-    lua_path = os.path.join(STPLUGIN_DIR, f"{app_id}.lua")
+    lua_path = os.path.join(get_stplugin_dir(), f"{app_id}.lua")
     if os.path.isfile(lua_path):
         os.remove(lua_path)
         removed.append(f"stplug-in/{app_id}.lua")
 
-    acf_path = os.path.join(STEAM_PATH, "steamapps", f"appmanifest_{app_id}.acf")
+    acf_path = os.path.join(get_steam_path(), "steamapps", f"appmanifest_{app_id}.acf")
     if os.path.isfile(acf_path):
         os.remove(acf_path)
         removed.append(f"appmanifest_{app_id}.acf")
@@ -359,7 +429,7 @@ def update_game(app_id):
     app_id = str(app_id)
     print(f"🔄 Updating AppID {app_id}...")
 
-    old_lua = os.path.join(STPLUGIN_DIR, f"{app_id}.lua")
+    old_lua = os.path.join(get_stplugin_dir(), f"{app_id}.lua")
     if os.path.isfile(old_lua):
         os.remove(old_lua)
         print(f"  🧹 Old lua deleted.")

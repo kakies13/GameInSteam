@@ -16,10 +16,7 @@ for /f "tokens=* delims= " %%x in ("%VERSION%") do set VERSION=%%x
 echo       Version: %VERSION%
 
 :: installer.iss içindeki versiyon satırını güncelle
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$f = Get-Content 'installer.iss' -Raw; ^
-   $f = $f -replace '#define MyAppVersion\s+""[^""]*""', '#define MyAppVersion   ""%VERSION%""'; ^
-   [IO.File]::WriteAllText('installer.iss', $f)"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$f = Get-Content 'installer.iss' -Raw; $f = $f -replace '#define MyAppVersion\s+\"\"[^\"\"]*\"\"', '#define MyAppVersion \"'%VERSION%'\"'; [IO.File]::WriteAllText('installer.iss', $f)"
 
 :: ── 1. Python DLL yolu ───────────────────────────────────────────────────
 echo.
@@ -54,6 +51,7 @@ pyinstaller ^
     --add-data "VERSION.txt;." ^
     --add-data "logo.ico;." ^
     --add-data "logo.png;." ^
+    --add-data "xinput1_4.dll;." ^
     %PYTHON_DLL_ARG% ^
     --hidden-import=requests ^
     --hidden-import=PIL ^

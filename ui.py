@@ -13,9 +13,10 @@ from typing import Any
 
 try:
     from steam_handler import (  # type: ignore
-        check_stplugin_system, add_shortcut_from_manifest, list_added_games,
-        list_recent_games, remove_game, update_game, get_game_name_from_steam,
-        restart_steam, get_gamelist_repo_games, is_game_in_repo,
+        check_stplugin_system, install_stplugin_dll, add_shortcut_from_manifest,
+        list_added_games, list_recent_games, remove_game, update_game,
+        get_game_name_from_steam, restart_steam, get_gamelist_repo_games,
+        is_game_in_repo,
     )
 except ImportError:
     print("Error: steam_handler.py not found!")
@@ -35,8 +36,11 @@ DEFAULT_WEBHOOK_URL = ""
 
 SPIN_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
-ctk.set_appearance_mode("dark")
+ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
+
+# macOS benzeri tipografi (Windows: Segoe UI)
+UI_FONT = "Segoe UI"
 
 
 def _time_ago(mtime: float) -> str:
@@ -56,16 +60,18 @@ def _hex_lerp(c1: str, c2: str, t: float) -> str:
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
-def _make_gradient_image(w: int, h: int, c1: str, c2: str) -> Image.Image:
-    """PIL gradient image (left→right)."""
-    img  = Image.new("RGB", (w, h))
+def _smoothstep(t: float) -> float:
+    """Ease-in-out for fluid UI transitions."""
+    t = max(0.0, min(1.0, t))
+    return t * t * (3.0 - 2.0 * t)
+
+
+def _solid_placeholder(w: int, h: int, bg: str, text: str, text_color: str) -> Image.Image:
+    """Oyun kapagi yokken duz renkli placeholder (canvas artefakti yok)."""
+    img = Image.new("RGB", (w, h), bg)
     draw = ImageDraw.Draw(img)
-    r1,g1,b1 = int(c1[1:3],16),int(c1[3:5],16),int(c1[5:7],16)
-    r2,g2,b2 = int(c2[1:3],16),int(c2[3:5],16),int(c2[5:7],16)
-    for x in range(0, w, 2):
-        t  = x / max(w-1, 1)
-        clr = (int(r1+(r2-r1)*t), int(g1+(g2-g1)*t), int(b1+(b2-b1)*t))
-        draw.line([(x,0),(x+1,h)], fill=clr)
+    draw.rectangle([0, 0, w - 1, h - 1], outline="#D1D1D6", width=1)
+    draw.text((w // 2 - 32, h // 2 - 6), text, fill=text_color)
     return img
 
 
@@ -74,27 +80,44 @@ class GameInSteamApp(ctk.CTk):
 
     def __init__(self):
         super().__init__()
-        self.title("GameInSteam — Steam Library Manager")
-        self.geometry("1120x700")
-        self.minsize(960, 640)
+        self.title("GameInSteam")
+        self.geometry("1180x760")
+        self.minsize(980, 660)
 
-        # ── PALETTE ──────────────────────────────────────────────────────────
-        self.c_bg           = "#080812"
-        self.c_sidebar      = "#0C0C1E"
-        self.c_card         = "#13132A"
-        self.c_card_hi      = "#1C1C3C"
-        self.c_sep          = "#1E1E40"
-        self.c_accent       = "#8B5CF6"   # electric violet
-        self.c_accent_hov   = "#7C3AED"
-        self.c_accent_dim   = "#2D1B69"
-        self.c_accent2      = "#EC4899"   # hot pink
-        self.c_accent3      = "#06B6D4"   # cyan
-        self.c_text         = "#F1F5F9"
-        self.c_text_dim     = "#64748B"
-        self.c_danger       = "#F43F5E"
-        self.c_danger_hov   = "#E11D48"
-        self.c_success      = "#10B981"
-        self.c_warning      = "#F59E0B"
+        # ── macOS-inspired design tokens ─────────────────────────────────────
+        self.c_bg           = "#F5F5F7"   # systemGroupedBackground
+        self.c_sidebar      = "#EDEDED"   # sidebar chrome
+        self.c_card         = "#FFFFFF"   # elevated surface
+        self.c_card_hi      = "#FFFFFF"
+        self.c_fill         = "#F2F2F7"   # secondary fill
+        self.c_fill_hover   = "#E8E8ED"   # tertiary / hover
+        self.c_sep          = "#D1D1D6"   # separator
+        self.c_border       = "#E5E5EA"   # subtle card edge
+        self.c_accent       = "#007AFF"   # systemBlue
+        self.c_accent_hov   = "#0066D6"
+        self.c_accent_dim   = "#E8F2FF"   # selected nav tint
+        self.c_accent2      = "#5856D6"   # systemIndigo
+        self.c_accent3      = "#32ADE6"   # systemTeal
+        self.c_text         = "#1D1D1F"   # label
+        self.c_text_dim     = "#86868B"   # secondaryLabel
+        self.c_text_tert    = "#AEAEB2"   # tertiaryLabel
+        self.c_on_accent    = "#FFFFFF"
+        self.c_danger       = "#FF3B30"   # systemRed
+        self.c_danger_hov   = "#FFECEC"
+        self.c_success      = "#34C759"   # systemGreen
+        self.c_warning      = "#FF9500"   # systemOrange
+        self.c_badge_ok     = "#E8F8ED"
+        self.c_badge_warn   = "#FFF4E5"
+        self.c_badge_err    = "#FFEBEA"
+        self.c_badge_clean  = "#E8F8ED"
+        self.c_pill_lib     = "#F2F2F7"
+        self.c_pill_repo    = "#F2F2F7"
+        self.c_nav_hover    = "#E5E5EA"
+        self.c_nav_sel      = "#FFFFFF"   # selected row (elevated pill)
+        self.r_sm, self.r_md, self.r_lg = 8, 10, 12
+        self._anim_ms       = 5
+        self._anim_steps    = 6
+        self._nav_items: list[ctk.CTkFrame] = []
 
         self.configure(fg_color=self.c_bg)
 
@@ -114,10 +137,8 @@ class GameInSteamApp(ctk.CTk):
         self._update_dialog_open = False
         self._update_info        = None
 
-        # Fallback thumbnail
-        fb = _make_gradient_image(IMG_W, IMG_H, self.c_card, self.c_card_hi)
-        draw = ImageDraw.Draw(fb)
-        draw.text((IMG_W//2-28, IMG_H//2-6), "NO IMAGE", fill=self.c_text_dim)
+        # Fallback thumbnail (solid — no stripe artifacts)
+        fb = _solid_placeholder(IMG_W, IMG_H, self.c_card_hi, "NO IMG", self.c_text_dim)
         self._empty_img = ImageTk.PhotoImage(fb)
 
         self._build_ui()
@@ -155,22 +176,24 @@ class GameInSteamApp(ctk.CTk):
     # ANIMATION HELPERS
     # ─────────────────────────────────────────────────────────────────────────
     def _anim_color(self, widget, attr: str, frm: str, to: str,
-                    steps: int = 8, step: int = 0):
-        """Smooth fg_color transition."""
+                    steps: int | None = None, step: int = 0):
+        """Smooth fg_color transition (ease-in-out)."""
+        steps = steps or self._anim_steps
         if step > steps:
             return
-        col = _hex_lerp(frm, to, step / steps)
+        col = _hex_lerp(frm, to, _smoothstep(step / steps))
         try:
             widget.configure(**{attr: col})
-            self.after(14, lambda: self._anim_color(widget, attr, frm, to, steps, step+1))
+            self.after(self._anim_ms,
+                       lambda: self._anim_color(widget, attr, frm, to, steps, step + 1))
         except Exception:
             pass
 
     def _hover_on(self, w):
-        self._anim_color(w, "fg_color", self.c_card, self.c_card_hi)
+        self._anim_color(w, "fg_color", self.c_card, self.c_fill)
 
     def _hover_off(self, w):
-        self._anim_color(w, "fg_color", self.c_card_hi, self.c_card)
+        self._anim_color(w, "fg_color", self.c_fill, self.c_card)
 
     def _bind_hover(self, widget):
         widget.bind("<Enter>", lambda e: self._hover_on(widget), add="+")
@@ -182,7 +205,7 @@ class GameInSteamApp(ctk.CTk):
         try:
             if label.winfo_exists():
                 label.configure(text=SPIN_FRAMES[frame % len(SPIN_FRAMES)])
-                self.after(80, lambda: self._spin(label, frame+1))
+                self.after(55, lambda: self._spin(label, frame + 1))
         except Exception:
             pass
 
@@ -193,76 +216,114 @@ class GameInSteamApp(ctk.CTk):
     def _stop_spin(self):
         self._spinner_active = False
 
+    # ── macOS design system helpers ─────────────────────────────────────────
+    def _font(self, size: int = 13, weight: str = "normal") -> ctk.CTkFont:
+        return ctk.CTkFont(UI_FONT, size=size, weight=weight)
+
+    def _scroll_frame(self, parent) -> ctk.CTkScrollableFrame:
+        return ctk.CTkScrollableFrame(
+            parent, fg_color="transparent",
+            scrollbar_button_color=self.c_fill_hover,
+            scrollbar_button_hover_color=self.c_text_tert)
+
+    def _entry(self, parent, placeholder: str = "", height: int = 36, **kw) -> ctk.CTkEntry:
+        opts = dict(
+            height=height, placeholder_text=placeholder,
+            fg_color=self.c_card, border_color=self.c_sep, border_width=1,
+            text_color=self.c_text, corner_radius=self.r_md,
+            font=self._font(13))
+        opts.update(kw)
+        return ctk.CTkEntry(parent, **opts)
+
+    def _primary_btn(self, parent, text: str, cmd, height: int = 36, **kw) -> ctk.CTkButton:
+        opts = dict(
+            text=text, height=height, command=cmd,
+            fg_color=self.c_accent, text_color=self.c_on_accent,
+            hover_color=self.c_accent_hov, font=self._font(13, "bold"),
+            corner_radius=self.r_md)
+        opts.update(kw)
+        return ctk.CTkButton(parent, **opts)
+
+    def _secondary_btn(self, parent, text: str, cmd, height: int = 36, **kw) -> ctk.CTkButton:
+        opts = dict(
+            text=text, height=height, command=cmd,
+            fg_color=self.c_fill, text_color=self.c_text,
+            hover_color=self.c_fill_hover, font=self._font(13, "bold"),
+            corner_radius=self.r_md, border_width=0)
+        opts.update(kw)
+        return ctk.CTkButton(parent, **opts)
+
+    def _toolbar_btn(self, parent, text: str, cmd) -> ctk.CTkButton:
+        return self._secondary_btn(parent, text, cmd, height=28, width=100,
+                                   font=self._font(12))
+
     # ─────────────────────────────────────────────────────────────────────────
     # BUILD UI
     # ─────────────────────────────────────────────────────────────────────────
     def _build_ui(self):
-        # ── SIDEBAR ──────────────────────────────────────────────────────────
-        self.sidebar = ctk.CTkFrame(self, width=235, corner_radius=0,
+        # ── SIDEBAR (macOS Settings tarzı) ───────────────────────────────────
+        self.sidebar = ctk.CTkFrame(self, width=248, corner_radius=0,
                                     fg_color=self.c_sidebar)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
 
-        # Logo area (gradient background)
-        logo_canvas = tk.Canvas(self.sidebar, width=235, height=90,
-                                highlightthickness=0, bd=0)
-        logo_canvas.pack(fill="x")
+        brand = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        brand.pack(fill="x", padx=16, pady=(22, 18))
 
-        grad_img = _make_gradient_image(235, 90, "#1A0A50", "#0C0C1E")
-        self._logo_grad = ImageTk.PhotoImage(grad_img)
-        logo_canvas.create_image(0, 0, anchor="nw", image=self._logo_grad)
-        logo_canvas.create_text(24, 32, anchor="w", text="🎮",
-                                font=("Segoe UI", 22), fill=self.c_text)
-        logo_canvas.create_text(58, 26, anchor="w", text="GAME IN STEAM",
-                                font=("Segoe UI", 12, "bold"), fill=self.c_text)
-        logo_canvas.create_text(58, 46, anchor="w", text="Steam Library Manager",
-                                font=("Segoe UI", 9), fill=self.c_text_dim)
+        mark = ctk.CTkFrame(brand, width=52, height=52, fg_color=self.c_accent,
+                            corner_radius=14)
+        mark.pack(anchor="w")
+        mark.pack_propagate(False)
+        ctk.CTkLabel(mark, text="G",
+                     font=self._font(22, "bold"), text_color=self.c_on_accent
+                     ).place(relx=0.5, rely=0.5, anchor="center")
 
-        self._sep(self.sidebar)
+        ctk.CTkLabel(brand, text="GameInSteam",
+                     font=self._font(17, "bold"), text_color=self.c_text,
+                     anchor="w").pack(anchor="w", pady=(12, 0))
+        ctk.CTkLabel(brand, text="Steam Library Manager",
+                     font=self._font(12), text_color=self.c_text_dim,
+                     anchor="w").pack(anchor="w", pady=(2, 0))
 
-        ctk.CTkLabel(self.sidebar, text="NAVIGATE",
-                     font=ctk.CTkFont("Segoe UI", 9, weight="bold"),
-                     text_color=self.c_text_dim).pack(anchor="w", padx=22, pady=(10,4))
+        nav_wrap = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        nav_wrap.pack(fill="both", expand=True, padx=10, pady=(4, 8))
 
-        self.btn_dash      = self._nav_btn("Dashboard",      "⊞", self._show_dash)
-        self.btn_lib       = self._nav_btn("My Library",     "📚", self._show_lib)
-        self.btn_recent    = self._nav_btn("Recent",         "🕐", self._show_recent)
-        self.btn_available = self._nav_btn("Available Games","🗂", self._show_available)
+        self._nav_section(nav_wrap, "Library")
+        self.btn_dash      = self._nav_btn(nav_wrap, "Dashboard",       self._show_dash)
+        self.btn_lib       = self._nav_btn(nav_wrap, "My Library",      self._show_lib)
+        self.btn_recent    = self._nav_btn(nav_wrap, "Recent",          self._show_recent)
+        self.btn_available = self._nav_btn(nav_wrap, "Available Games", self._show_available)
 
-        self._sep(self.sidebar)
-        ctk.CTkLabel(self.sidebar, text="SYSTEM",
-                     font=ctk.CTkFont("Segoe UI", 9, weight="bold"),
-                     text_color=self.c_text_dim).pack(anchor="w", padx=22, pady=(10,4))
+        self._nav_section(nav_wrap, "General")
+        self.btn_settings  = self._nav_btn(nav_wrap, "Settings",        self._show_settings)
 
-        self.btn_settings  = self._nav_btn("Settings",       "⚙", self._show_settings)
+        foot = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        foot.pack(side="bottom", fill="x", padx=14, pady=(0, 16))
 
+        status_card = ctk.CTkFrame(foot, fg_color=self.c_nav_sel, corner_radius=self.r_lg,
+                                   border_width=1, border_color=self.c_border)
+        status_card.pack(fill="x", pady=(0, 10))
         self.sys_status_lbl = ctk.CTkLabel(
-            self.sidebar, text="Checking system…",
-            text_color=self.c_text_dim, font=ctk.CTkFont(size=10),
+            status_card, text="Checking system…",
+            text_color=self.c_text_dim, font=self._font(11),
             wraplength=200, justify="left")
-        self.sys_status_lbl.pack(side="bottom", pady=(0,8), padx=18, anchor="w")
-        ctk.CTkLabel(self.sidebar, text=f"v{CURRENT_VERSION}",
-                     text_color=self.c_text_dim,
-                     font=ctk.CTkFont(size=10)).pack(side="bottom", anchor="w", padx=18)
-        self._sep(self.sidebar, side="bottom")
+        self.sys_status_lbl.pack(padx=12, pady=11, anchor="w")
 
-        # ── RIGHT BORDER ──────────────────────────────────────────────────────
+        ctk.CTkLabel(foot, text=f"Version {CURRENT_VERSION}",
+                     text_color=self.c_text_tert,
+                     font=self._font(11)).pack(anchor="w", padx=4)
+
         ctk.CTkFrame(self, width=1, fg_color=self.c_sep).pack(side="left", fill="y")
 
-        # ── MAIN ──────────────────────────────────────────────────────────────
+        # ── MAIN CONTENT ─────────────────────────────────────────────────────
         self.main_frame = ctk.CTkFrame(self, corner_radius=0, fg_color=self.c_bg)
         self.main_frame.pack(side="right", fill="both", expand=True)
 
-        _sf = lambda: ctk.CTkScrollableFrame(
-            self.main_frame, fg_color="transparent",
-            scrollbar_button_color=self.c_accent_dim,
-            scrollbar_button_hover_color=self.c_accent)
-
         self.page_dash      = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        self.page_lib       = _sf()
+        self.page_lib       = self._scroll_frame(self.main_frame)
         self.page_recent    = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.page_available = ctk.CTkFrame(self.main_frame, fg_color="transparent")
-        self.page_settings  = _sf()
+        self.page_settings  = self._scroll_frame(self.main_frame)
 
         self._build_dash()
         self._build_lib()
@@ -274,230 +335,246 @@ class GameInSteamApp(ctk.CTk):
     # ── NAV HELPERS ───────────────────────────────────────────────────────────
     def _sep(self, parent, side="top"):
         ctk.CTkFrame(parent, height=1, fg_color=self.c_sep).pack(
-            fill="x", padx=16, pady=6, side=side)
+            fill="x", padx=12, pady=8, side=side)
 
-    def _nav_btn(self, text: str, icon: str, cmd) -> ctk.CTkButton:
+    def _nav_section(self, parent, title: str):
+        ctk.CTkLabel(parent, text=title.upper(),
+                     font=self._font(11, "bold"),
+                     text_color=self.c_text_tert).pack(anchor="w", padx=10, pady=(14, 6))
+
+    def _nav_btn(self, parent, text: str, cmd) -> ctk.CTkFrame:
+        row = ctk.CTkFrame(parent, fg_color="transparent", corner_radius=self.r_md, height=34)
+        row.pack(fill="x", pady=1)
+        row.pack_propagate(False)
+
         btn = ctk.CTkButton(
-            self.sidebar, text=f" {icon}   {text}",
-            font=ctk.CTkFont("Segoe UI", 12, weight="bold"),
-            fg_color="transparent", text_color=self.c_text_dim,
-            anchor="w", hover_color=self.c_sep,
-            height=44, corner_radius=10, command=cmd)
-        btn.pack(fill="x", padx=10, pady=2)
-        return btn
+            row, text=text,
+            font=self._font(13),
+            fg_color="transparent", text_color=self.c_text,
+            anchor="w", hover_color=self.c_nav_hover,
+            height=30, corner_radius=self.r_md, command=cmd)
+        btn.pack(fill="both", expand=True, padx=4, pady=2)
+
+        row._nav_btn = btn
+        self._nav_items.append(row)
+        return row
 
     def _reset_nav(self):
-        for b in [self.btn_dash, self.btn_lib, self.btn_recent,
-                  self.btn_available, self.btn_settings]:
-            b.configure(fg_color="transparent", text_color=self.c_text_dim)
+        for row in self._nav_items:
+            row.configure(fg_color="transparent")
+            row._nav_btn.configure(
+                fg_color="transparent", text_color=self.c_text,
+                font=self._font(13))
         for p in [self.page_dash, self.page_lib, self.page_recent,
                   self.page_available, self.page_settings]:
             p.pack_forget()
 
-    def _activate_nav(self, btn):
-        btn.configure(fg_color=self.c_accent_dim, text_color=self.c_accent)
+    def _activate_nav(self, row: ctk.CTkFrame):
+        row.configure(fg_color=self.c_nav_sel)
+        row._nav_btn.configure(
+            fg_color=self.c_nav_sel, text_color=self.c_text,
+            font=self._font(13, "bold"))
+
+    def _open_page(self, page, btn, page_id: str, on_show=None):
+        """Hizli sayfa gecisi — basliklar ve layout ayni kalir."""
+        self._reset_nav()
+        self._activate_nav(btn)
+        page.pack(fill="both", expand=True, padx=40, pady=28)
+        self._current_page = page_id
+        self.update_idletasks()
+        if on_show:
+            on_show()
 
     def _show_dash(self):
-        self._reset_nav(); self._activate_nav(self.btn_dash)
-        self.page_dash.pack(fill="both", expand=True, padx=30, pady=24)
-        self._current_page = "dash"
-        self._refresh_hero_stats()
+        self._open_page(self.page_dash, self.btn_dash, "dash", self._refresh_hero_stats)
 
     def _show_lib(self):
-        self._reset_nav(); self._activate_nav(self.btn_lib)
-        self.page_lib.pack(fill="both", expand=True, padx=30, pady=24)
-        self._current_page = "lib"; self._load_games()
+        self._open_page(self.page_lib, self.btn_lib, "lib", self._load_games)
 
     def _show_recent(self):
-        self._reset_nav(); self._activate_nav(self.btn_recent)
-        self.page_recent.pack(fill="both", expand=True, padx=30, pady=24)
-        self._current_page = "recent"; self._load_recent()
+        self._open_page(self.page_recent, self.btn_recent, "recent", self._load_recent)
 
     def _show_available(self):
-        self._reset_nav(); self._activate_nav(self.btn_available)
-        self.page_available.pack(fill="both", expand=True, padx=30, pady=24)
-        self._current_page = "available"
+        self._open_page(self.page_available, self.btn_available, "available")
         if not self._available_loaded:
             self._load_available_games()
 
     def _show_settings(self):
-        self._reset_nav(); self._activate_nav(self.btn_settings)
-        self.page_settings.pack(fill="both", expand=True, padx=30, pady=24)
-        self._current_page = "settings"
+        self._open_page(self.page_settings, self.btn_settings, "settings")
 
     # ─────────────────────────────────────────────────────────────────────────
     # CARD & SECTION HELPERS
     # ─────────────────────────────────────────────────────────────────────────
     def _card(self, parent, hover: bool = True) -> ctk.CTkFrame:
-        f = ctk.CTkFrame(parent, fg_color=self.c_card, corner_radius=16)
+        f = ctk.CTkFrame(parent, fg_color=self.c_card, corner_radius=self.r_lg,
+                         border_width=1, border_color=self.c_border)
         if hover:
             self._bind_hover(f)
         return f
 
+    def _group_card(self, parent) -> ctk.CTkFrame:
+        """macOS grouped list container."""
+        return ctk.CTkFrame(parent, fg_color=self.c_card, corner_radius=self.r_lg,
+                            border_width=1, border_color=self.c_border)
+
     def _accent_card(self, parent, color: str | None = None) -> ctk.CTkFrame:
-        """Card with a 3px left accent stripe."""
-        outer = ctk.CTkFrame(parent, fg_color=color or self.c_accent, corner_radius=16)
-        inner = ctk.CTkFrame(outer, fg_color=self.c_card, corner_radius=14)
-        inner.pack(fill="both", expand=True, padx=(4,0))
+        outer = ctk.CTkFrame(parent, fg_color=color or self.c_accent, corner_radius=self.r_lg)
+        inner = ctk.CTkFrame(outer, fg_color=self.c_card, corner_radius=self.r_lg - 2)
+        inner.pack(fill="both", expand=True, padx=1, pady=1)
         self._bind_hover(inner)
         return inner
 
     def _section_title(self, parent, text: str, sub: str = ""):
         ctk.CTkLabel(parent, text=text,
-                     font=ctk.CTkFont("Segoe UI", 26, weight="bold"),
-                     text_color=self.c_text).pack(anchor="w", pady=(6,2))
+                     font=self._font(28, "bold"),
+                     text_color=self.c_text, anchor="w").pack(anchor="w")
         if sub:
             ctk.CTkLabel(parent, text=sub,
-                         font=ctk.CTkFont("Segoe UI", 12),
-                         text_color=self.c_text_dim).pack(anchor="w", pady=(0,14))
+                         font=self._font(13),
+                         text_color=self.c_text_dim, anchor="w"
+                         ).pack(anchor="w", pady=(4, 20))
         else:
-            ctk.CTkFrame(parent, height=14, fg_color="transparent").pack()
+            ctk.CTkFrame(parent, height=16, fg_color="transparent").pack()
+
+    def _mini_stat(self, parent, label: str, value: str, color: str) -> ctk.CTkLabel:
+        card = ctk.CTkFrame(parent, fg_color=self.c_fill, corner_radius=self.r_lg,
+                            border_width=1, border_color=self.c_border,
+                            width=112, height=76)
+        card.pack(side="left", padx=(8, 0))
+        card.pack_propagate(False)
+        val = ctk.CTkLabel(card, text=value,
+                           font=self._font(24, "bold"), text_color=color)
+        val.pack(expand=True, pady=(8, 0))
+        ctk.CTkLabel(card, text=label,
+                     font=self._font(11), text_color=self.c_text_dim
+                     ).pack(pady=(0, 10))
+        return val
 
     def _ghost_btn(self, parent, text: str, cmd, width: int = 90) -> ctk.CTkButton:
-        return ctk.CTkButton(parent, text=text, width=width, height=32,
-                             fg_color=self.c_card_hi, text_color=self.c_text,
-                             hover_color=self.c_sep, corner_radius=10, command=cmd)
+        return self._secondary_btn(parent, text, cmd, width=width, height=30,
+                                   font=self._font(12))
 
     # ─────────────────────────────────────────────────────────────────────────
     # DASHBOARD
     # ─────────────────────────────────────────────────────────────────────────
     def _build_dash(self):
-        self.dash_scroll = ctk.CTkScrollableFrame(
-            self.page_dash, fg_color="transparent",
-            scrollbar_button_color=self.c_accent_dim,
-            scrollbar_button_hover_color=self.c_accent)
+        self.dash_scroll = self._scroll_frame(self.page_dash)
         self.dash_scroll.pack(fill="both", expand=True)
 
-        # ── HERO BANNER ──────────────────────────────────────────────────────
-        self.hero_canvas = tk.Canvas(self.dash_scroll, height=110,
-                                     highlightthickness=0, bd=0,
-                                     bg=self.c_bg)
-        self.hero_canvas.pack(fill="x", pady=(0,20))
-        self._draw_hero()
-        self.hero_canvas.bind("<Configure>", lambda e: self._draw_hero(e.width))
+        # Hero — büyük başlık, sade istatistik (macOS Home)
+        hero = ctk.CTkFrame(self.dash_scroll, fg_color="transparent")
+        hero.pack(fill="x", pady=(0, 24))
 
-        # ── ADD GAME CARD ─────────────────────────────────────────────────────
-        add_card = self._card(self.dash_scroll, hover=False)
-        add_card.pack(fill="x", pady=(0,18))
+        head = ctk.CTkFrame(hero, fg_color="transparent")
+        head.pack(fill="x")
+        left = ctk.CTkFrame(head, fg_color="transparent")
+        left.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(left, text="Welcome back",
+                     font=self._font(32, "bold"), text_color=self.c_text,
+                     anchor="w").pack(anchor="w")
+        ctk.CTkLabel(left, text="Add games to your Steam library in seconds.",
+                     font=self._font(15), text_color=self.c_text_dim,
+                     anchor="w").pack(anchor="w", pady=(6, 0))
 
-        # Colored top bar on card
-        ctk.CTkFrame(add_card, height=3, fg_color=self.c_accent,
-                     corner_radius=0).pack(fill="x")
+        stats = ctk.CTkFrame(head, fg_color="transparent")
+        stats.pack(side="right")
+        self.hero_lib_val  = self._mini_stat(stats, "In Library", "0", self.c_accent)
+        self.hero_repo_val = self._mini_stat(stats, "In Repo", "—", self.c_accent3)
 
+        # Add game — grouped form
+        ctk.CTkLabel(self.dash_scroll, text="Add Game",
+                     font=self._font(13, "bold"), text_color=self.c_text_tert,
+                     anchor="w").pack(anchor="w", pady=(0, 8))
+
+        add_card = self._group_card(self.dash_scroll)
+        add_card.pack(fill="x", pady=(0, 20))
         inner = ctk.CTkFrame(add_card, fg_color="transparent")
-        inner.pack(fill="x", padx=24, pady=20)
+        inner.pack(fill="x", padx=20, pady=20)
 
-        # Label
-        ctk.CTkLabel(inner, text="🔍  Quick Find",
-                     font=ctk.CTkFont("Segoe UI", 13, weight="bold"),
-                     text_color=self.c_accent).pack(anchor="w")
+        ctk.CTkLabel(inner, text="Quick Find",
+                     font=self._font(15, "bold"), text_color=self.c_text
+                     ).pack(anchor="w", pady=(0, 10))
 
-        # Search box
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", self._on_search_change)
-        self.inp_search = ctk.CTkEntry(
-            inner, height=44, textvariable=self.search_var,
-            placeholder_text="Type a game name to find its AppID…",
-            fg_color=self.c_card_hi, border_color=self.c_sep, border_width=1,
-            text_color=self.c_text, corner_radius=12)
-        self.inp_search.pack(fill="x", pady=(8,4))
+        self.inp_search = self._entry(
+            inner, "Search Steam store by game name…", height=38)
+        self.inp_search.pack(fill="x", pady=(0, 6))
 
         self.search_results_frame = ctk.CTkScrollableFrame(
-            inner, height=0, fg_color=self.c_bg, corner_radius=10)
+            inner, height=0, fg_color=self.c_fill, corner_radius=self.r_md)
 
-        # ID + Name row
         row = ctk.CTkFrame(inner, fg_color="transparent")
-        row.pack(fill="x", pady=10)
+        row.pack(fill="x", pady=(12, 0))
 
         def _lbl_entry(col_parent, label, placeholder):
             ctk.CTkLabel(col_parent, text=label,
-                         font=ctk.CTkFont("Segoe UI", 11, weight="bold"),
-                         text_color=self.c_text_dim).pack(anchor="w")
-            e = ctk.CTkEntry(col_parent, height=44, placeholder_text=placeholder,
-                             fg_color=self.c_card_hi, border_color=self.c_sep,
-                             border_width=1, text_color=self.c_text, corner_radius=12)
-            e.pack(fill="x", pady=4)
+                         font=self._font(12), text_color=self.c_text_dim
+                         ).pack(anchor="w", pady=(0, 4))
+            e = self._entry(col_parent, placeholder, height=38)
+            e.pack(fill="x")
             return e
 
         c1 = ctk.CTkFrame(row, fg_color="transparent")
-        c1.pack(side="left", fill="x", expand=True, padx=(0,8))
-        self.inp_id = _lbl_entry(c1, "Steam App ID", "e.g. 730, 440")
+        c1.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        self.inp_id = _lbl_entry(c1, "Steam App ID", "e.g. 730")
 
         c2 = ctk.CTkFrame(row, fg_color="transparent")
-        c2.pack(side="left", fill="x", expand=True, padx=(8,0))
-        self.inp_name = _lbl_entry(c2, "Game Name (Optional)", "Auto-filled…")
+        c2.pack(side="left", fill="x", expand=True)
+        self.inp_name = _lbl_entry(c2, "Game Name (optional)", "Auto-filled")
 
-        # Buttons
         btn_row = ctk.CTkFrame(inner, fg_color="transparent")
-        btn_row.pack(fill="x", pady=(14,0))
+        btn_row.pack(fill="x", pady=(18, 0))
 
-        self.btn_add = ctk.CTkButton(
-            btn_row, text="⚡  ADD TO LIBRARY", height=50,
-            fg_color=self.c_accent, text_color="#FFFFFF",
-            hover_color=self.c_accent_hov,
-            font=ctk.CTkFont("Segoe UI", 14, weight="bold"),
-            corner_radius=14, command=self._do_add)
-        self.btn_add.pack(side="left", fill="x", expand=True, padx=(0,6))
+        self.btn_add = self._primary_btn(
+            btn_row, "Add to Library", self._do_add, height=40)
+        self.btn_add.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        self.btn_restart = ctk.CTkButton(
-            btn_row, text="🔄  RESTART STEAM", height=50,
-            fg_color=self.c_card_hi, text_color=self.c_text,
-            hover_color=self.c_sep,
-            font=ctk.CTkFont("Segoe UI", 13, weight="bold"),
-            corner_radius=14, command=self._do_steam_restart)
-        self.btn_restart.pack(side="left", fill="x", expand=True, padx=(6,0))
+        self.btn_restart = self._secondary_btn(
+            btn_row, "Restart Steam", self._do_steam_restart, height=40)
+        self.btn_restart.pack(side="left", fill="x", expand=True)
 
-        # Status
         self.status_lbl = ctk.CTkLabel(inner, text="",
-                                        text_color=self.c_text_dim,
-                                        font=ctk.CTkFont("Segoe UI", 12))
-        self.status_lbl.pack(pady=(12,0))
+                                       text_color=self.c_text_dim,
+                                       font=self._font(12))
+        self.status_lbl.pack(pady=(14, 0))
 
         self.prog_bar = ctk.CTkProgressBar(
-            inner, fg_color=self.c_card_hi,
-            progress_color=self.c_accent, height=5, corner_radius=4)
+            inner, fg_color=self.c_fill,
+            progress_color=self.c_accent, height=4, corner_radius=2)
         self.prog_bar.set(0)
+        self._refresh_hero_stats()
 
-    def _draw_hero(self, width: int = 900):
-        """Draws the gradient hero banner with stats."""
-        c = self.hero_canvas
-        c.delete("all")
-        w = max(width, 400)
-
-        # Gradient background
-        grad = _make_gradient_image(w, 110, "#1A0840", "#0C0C1E")
-        self._hero_img = ImageTk.PhotoImage(grad)
-        c.create_image(0, 0, anchor="nw", image=self._hero_img)
-
-        # Accent line at top
-        c.create_rectangle(0, 0, w, 3, fill=self.c_accent, outline="")
-
-        # Title
-        c.create_text(24, 38, anchor="w", text="Welcome back  👋",
-                      font=("Segoe UI", 20, "bold"), fill=self.c_text)
-        c.create_text(24, 68, anchor="w",
-                      text="Add games to your Steam library in seconds.",
-                      font=("Segoe UI", 11), fill=self.c_text_dim)
-
-        # Stats pills (right side)
-        lib_count  = len(list_added_games()) if os.path.isdir(
-            os.path.join(r"C:\Program Files (x86)\Steam", "config", "stplug-in")) else 0
-        repo_count = len(self._available_games)
-
-        c.create_rectangle(w-260, 30, w-160, 82, fill="#2D1B69", outline="", width=0)
-        c.create_text(w-210, 48, anchor="center", text=str(lib_count),
-                      font=("Segoe UI", 20, "bold"), fill=self.c_accent)
-        c.create_text(w-210, 68, anchor="center", text="In Library",
-                      font=("Segoe UI", 9), fill=self.c_text_dim)
-
-        c.create_rectangle(w-148, 30, w-24, 82, fill="#1B2D3A", outline="", width=0)
-        c.create_text(w-86, 48, anchor="center", text=str(repo_count) if repo_count else "—",
-                      font=("Segoe UI", 20, "bold"), fill=self.c_accent3)
-        c.create_text(w-86, 68, anchor="center", text="In Repo",
-                      font=("Segoe UI", 9), fill=self.c_text_dim)
+    def _page_header(self, parent, title: str,
+                     refresh_cmd=None) -> ctk.CTkButton | None:
+        top = ctk.CTkFrame(parent, fg_color="transparent")
+        top.pack(fill="x", pady=(0, 20))
+        left = ctk.CTkFrame(top, fg_color="transparent")
+        left.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(left, text=title,
+                     font=self._font(28, "bold"),
+                     text_color=self.c_text).pack(side="left", anchor="w")
+        if not refresh_cmd:
+            return None
+        btn = self._toolbar_btn(top, "Refresh", refresh_cmd)
+        btn.pack(side="right")
+        return btn
 
     def _refresh_hero_stats(self):
-        self.after(0, lambda: self._draw_hero(self.hero_canvas.winfo_width()))
+        def _update():
+            try:
+                from steam_handler import get_stplugin_dir
+                stplugin_ok = os.path.isdir(get_stplugin_dir())
+            except Exception:
+                stplugin_ok = False
+            lib_count  = len(list_added_games()) if stplugin_ok else 0
+            repo_count = len(self._available_games)
+            if hasattr(self, "hero_lib_val"):
+                self.hero_lib_val.configure(text=str(lib_count))
+            if hasattr(self, "hero_repo_val"):
+                self.hero_repo_val.configure(
+                    text=str(repo_count) if repo_count else "—")
+        self.after(0, _update)
 
     # ── SEARCH ────────────────────────────────────────────────────────────────
     def _on_search_change(self, *args):
@@ -506,7 +583,7 @@ class GameInSteamApp(ctk.CTk):
             self.search_results_frame.pack_forget(); return
         if hasattr(self, "_st"):
             self.after_cancel(self._st)
-        self._st = self.after(480, lambda: self._start_search(q))
+        self._st = self.after(300, lambda: self._start_search(q))
 
     def _start_search(self, query):
         for w in self.search_results_frame.winfo_children(): w.destroy()
@@ -552,7 +629,8 @@ class GameInSteamApp(ctk.CTk):
             ctk.CTkButton(
                 self.search_results_frame, text=txt, anchor="w",
                 fg_color="transparent", text_color=self.c_danger if den else self.c_text,
-                hover_color=self.c_sep,
+                hover_color=self.c_fill_hover,
+                font=self._font(13),
                 command=lambda a=aid,n=name,d=den: self._pick_search(a,n,d)
             ).pack(fill="x", pady=1)
 
@@ -582,21 +660,21 @@ class GameInSteamApp(ctk.CTk):
 
         self.cat_var = ctk.StringVar(value="All")
         ctk.CTkOptionMenu(top, values=self._categories, variable=self.cat_var,
-                          height=32, width=140,
-                          fg_color=self.c_card, button_color=self.c_card,
-                          button_hover_color=self.c_accent,
-                          command=self._filter_library).pack(side="left", padx=14)
+                          height=28, width=150,
+                          fg_color=self.c_fill, button_color=self.c_fill,
+                          button_hover_color=self.c_fill_hover,
+                          text_color=self.c_text, dropdown_fg_color=self.c_card,
+                          dropdown_text_color=self.c_text,
+                          corner_radius=self.r_md,
+                          command=self._filter_library).pack(side="left", padx=12)
 
         self.lib_search_var = tk.StringVar()
         self.lib_search_var.trace_add("write", self._filter_library)
-        ctk.CTkEntry(top, height=32, placeholder_text="🔍  Filter…",
-                     fg_color=self.c_card, border_color=self.c_sep,
-                     textvariable=self.lib_search_var,
-                     corner_radius=10).pack(side="left", fill="x", expand=True, padx=(0,12))
+        self._entry(top, "Filter library…", height=28,
+                    textvariable=self.lib_search_var
+                    ).pack(side="left", fill="x", expand=True, padx=(0, 12))
 
-        ctk.CTkButton(top, text="↺  Refresh", width=100, height=32,
-                      fg_color=self.c_card, hover_color=self.c_accent,
-                      corner_radius=10, command=self._load_games).pack(side="right")
+        self._toolbar_btn(top, "Refresh", self._load_games).pack(side="right")
 
         self.lib_container = ctk.CTkFrame(self.page_lib, fg_color="transparent")
         self.lib_container.pack(fill="both", expand=True)
@@ -640,14 +718,10 @@ class GameInSteamApp(ctk.CTk):
         card._app_id = aid
         card.pack(fill="x", pady=6)
 
-        # Colored top strip
-        ctk.CTkFrame(card, height=2, fg_color=self.c_accent,
-                     corner_radius=0).pack(fill="x")
-
         row = ctk.CTkFrame(card, fg_color="transparent")
         row.pack(fill="x", padx=16, pady=14)
 
-        img_lbl = tk.Label(row, bg=self.c_card, image=self._empty_img, bd=0)
+        img_lbl = tk.Label(row, bg=self.c_fill, image=self._empty_img, bd=0)
         img_lbl.pack(side="left", padx=(0,16))
 
         info = ctk.CTkFrame(row, fg_color="transparent")
@@ -655,7 +729,7 @@ class GameInSteamApp(ctk.CTk):
 
         cached   = self._name_cache.get(aid,"")
         name_lbl = ctk.CTkLabel(info, text=cached or f"Game #{aid}",
-                                 font=ctk.CTkFont("Segoe UI",17,weight="bold"),
+                                 font=self._font(17, "bold"),
                                  text_color=self.c_text)
         name_lbl.pack(anchor="w")
 
@@ -673,9 +747,10 @@ class GameInSteamApp(ctk.CTk):
         btns = ctk.CTkFrame(row, fg_color="transparent")
         btns.pack(side="right")
         self._ghost_btn(btns, "↺  Update", lambda: self._do_update(aid), 100).pack(side="left", padx=4)
-        ctk.CTkButton(btns, text="Remove", width=86, height=32,
-                      fg_color=self.c_card_hi, text_color=self.c_danger,
-                      hover_color="#3A0F1A", corner_radius=10,
+        ctk.CTkButton(btns, text="Remove", width=86, height=30,
+                      fg_color=self.c_fill, text_color=self.c_danger,
+                      hover_color=self.c_danger_hov, corner_radius=self.r_md,
+                      font=self._font(12),
                       command=lambda: self._do_remove(aid, card)).pack(side="left", padx=4)
 
         if not cached:
@@ -727,44 +802,34 @@ class GameInSteamApp(ctk.CTk):
                 self.after(0, lambda: self._apply_crack_ui(lbl,st) if lbl.winfo_exists() else None)
             else:
                 self.after(0, lambda: lbl.configure(
-                    text="CLEAN / NO DRM", fg_color="#1A2E22",
+                    text="CLEAN / NO DRM", fg_color=self.c_badge_clean,
                     text_color=self.c_success) if lbl.winfo_exists() else None)
         except Exception:
             self.after(0, lambda: lbl.configure(
-                text="ERROR", fg_color="#2E1A1A",
+                text="ERROR", fg_color=self.c_badge_err,
                 text_color=self.c_danger) if lbl.winfo_exists() else None)
 
     def _apply_crack_ui(self, lbl, st):
         if not lbl.winfo_exists(): return
         if st["cracked"]:
             lbl.configure(text=f"✓ CRACKED  {st['date']}",
-                          fg_color="#1A3028", text_color=self.c_success)
+                          fg_color=self.c_badge_ok, text_color=self.c_success)
         else:
             prot = (st.get("protection") or "PROTECTED").upper()
-            lbl.configure(text=prot, fg_color="#2E2010", text_color=self.c_warning)
+            lbl.configure(text=prot, fg_color=self.c_badge_warn, text_color=self.c_warning)
 
     # ─────────────────────────────────────────────────────────────────────────
     # RECENT
     # ─────────────────────────────────────────────────────────────────────────
     def _build_recent(self):
-        top = ctk.CTkFrame(self.page_recent, fg_color="transparent")
-        top.pack(fill="x", pady=(0,6))
-        ctk.CTkLabel(top, text="🕐  SON EKLENENLER",
-                     font=ctk.CTkFont("Segoe UI", 24, weight="bold"),
-                     text_color=self.c_text).pack(side="left")
-        ctk.CTkButton(top, text="↺  Refresh", width=110, height=34,
-                      fg_color=self.c_card, hover_color=self.c_accent,
-                      corner_radius=10, command=self._load_recent).pack(side="right")
+        self._page_header(self.page_recent, "Recent", self._load_recent)
 
         self.recent_info = ctk.CTkLabel(self.page_recent, text="",
                                          text_color=self.c_text_dim,
                                          font=ctk.CTkFont(size=12))
         self.recent_info.pack(anchor="w", pady=(2,10))
 
-        self.recent_scroll = ctk.CTkScrollableFrame(
-            self.page_recent, fg_color="transparent",
-            scrollbar_button_color=self.c_accent_dim,
-            scrollbar_button_hover_color=self.c_accent)
+        self.recent_scroll = self._scroll_frame(self.page_recent)
         self.recent_scroll.pack(fill="both", expand=True)
 
     def _load_recent(self):
@@ -788,14 +853,10 @@ class GameInSteamApp(ctk.CTk):
             card  = self._card(self.recent_scroll)
             card.pack(fill="x", pady=5)
 
-            # Left time indicator
-            ctk.CTkFrame(card, width=4, fg_color=self.c_accent2,
-                         corner_radius=2).pack(side="left", fill="y", padx=(10,0), pady=10)
-
             row = ctk.CTkFrame(card, fg_color="transparent")
             row.pack(side="left", fill="both", expand=True, padx=12, pady=12)
 
-            img_lbl = tk.Label(row, bg=self.c_card, image=self._empty_img, bd=0)
+            img_lbl = tk.Label(row, bg=self.c_fill, image=self._empty_img, bd=0)
             img_lbl.pack(side="left", padx=(0,14))
 
             info = ctk.CTkFrame(row, fg_color="transparent")
@@ -818,10 +879,11 @@ class GameInSteamApp(ctk.CTk):
 
             right = ctk.CTkFrame(row, fg_color="transparent")
             right.pack(side="right")
-            ctk.CTkButton(right, text="Remove", width=86, height=32,
-                          fg_color=self.c_card_hi, text_color=self.c_danger,
-                          hover_color="#3A0F1A", corner_radius=10,
-                          command=lambda a=aid, c=card: self._do_remove(a,c)).pack()
+            ctk.CTkButton(right, text="Remove", width=86, height=30,
+                          fg_color=self.c_fill, text_color=self.c_danger,
+                          hover_color=self.c_danger_hov, corner_radius=self.r_md,
+                          font=self._font(12),
+                          command=lambda a=aid, c=card: self._do_remove(a, c)).pack()
 
             if aid not in self._name_cache:
                 threading.Thread(target=self._fetch_name,
@@ -836,16 +898,8 @@ class GameInSteamApp(ctk.CTk):
     # AVAILABLE GAMES
     # ─────────────────────────────────────────────────────────────────────────
     def _build_available(self):
-        top = ctk.CTkFrame(self.page_available, fg_color="transparent")
-        top.pack(fill="x", pady=(0,6))
-        ctk.CTkLabel(top, text="🗂  AVAILABLE GAMES",
-                     font=ctk.CTkFont("Segoe UI",24,weight="bold"),
-                     text_color=self.c_text).pack(side="left")
-        self.avail_refresh_btn = ctk.CTkButton(
-            top, text="↺  Refresh", width=110, height=34,
-            fg_color=self.c_card, hover_color=self.c_accent,
-            corner_radius=10, command=self._refresh_available_games)
-        self.avail_refresh_btn.pack(side="right")
+        self.avail_refresh_btn = self._page_header(
+            self.page_available, "Available Games", self._refresh_available_games)
 
         # Search bar
         search_row = ctk.CTkFrame(self.page_available, fg_color="transparent")
@@ -865,16 +919,10 @@ class GameInSteamApp(ctk.CTk):
 
         self.avail_search_var = tk.StringVar()
         self.avail_search_var.trace_add("write", self._filter_available)
-        ctk.CTkEntry(search_row, height=32, width=260,
-                     placeholder_text="🔍  Filter by name or AppID…",
-                     fg_color=self.c_card, border_color=self.c_sep,
-                     textvariable=self.avail_search_var,
-                     corner_radius=10).pack(side="right")
+        self._entry(search_row, "Filter by name or App ID…", height=28, width=260,
+                    textvariable=self.avail_search_var).pack(side="right")
 
-        self.avail_scroll = ctk.CTkScrollableFrame(
-            self.page_available, fg_color="transparent",
-            scrollbar_button_color=self.c_accent_dim,
-            scrollbar_button_hover_color=self.c_accent)
+        self.avail_scroll = self._scroll_frame(self.page_available)
         self.avail_scroll.pack(fill="both", expand=True)
 
     def _load_available_games(self):
@@ -918,14 +966,10 @@ class GameInSteamApp(ctk.CTk):
         card._name_str = ""
         card.pack(fill="x", pady=5)
 
-        # Accent strip
-        ctk.CTkFrame(card, width=4, fg_color=self.c_accent,
-                     corner_radius=2).pack(side="left", fill="y", padx=(10,0), pady=10)
-
         row = ctk.CTkFrame(card, fg_color="transparent")
-        row.pack(side="left", fill="both", expand=True, padx=12, pady=12)
+        row.pack(fill="both", expand=True, padx=16, pady=14)
 
-        img_lbl = tk.Label(row, bg=self.c_card, image=self._empty_img, bd=0)
+        img_lbl = tk.Label(row, bg=self.c_fill, image=self._empty_img, bd=0)
         img_lbl.pack(side="left", padx=(0,14))
 
         info = ctk.CTkFrame(row, fg_color="transparent")
@@ -945,13 +989,8 @@ class GameInSteamApp(ctk.CTk):
 
         right = ctk.CTkFrame(row, fg_color="transparent")
         right.pack(side="right")
-        ctk.CTkButton(right, text="⚡  ADD", width=100, height=40,
-                      fg_color=self.c_accent, text_color="#FFFFFF",
-                      hover_color=self.c_accent_hov,
-                      font=ctk.CTkFont("Segoe UI",13,weight="bold"),
-                      corner_radius=12,
-                      command=lambda a=aid, nl=name_lbl: self._quick_add(a, nl)
-                      ).pack()
+        self._primary_btn(right, "Add", lambda a=aid, nl=name_lbl: self._quick_add(a, nl),
+                          width=88, height=34).pack()
 
         threading.Thread(target=self._fetch_avail_name,
                          args=(aid,name_lbl,card), daemon=True).start()
@@ -988,57 +1027,63 @@ class GameInSteamApp(ctk.CTk):
     # SETTINGS
     # ─────────────────────────────────────────────────────────────────────────
     def _build_settings(self):
-        self._section_title(self.page_settings, "SETTINGS")
+        self._section_title(self.page_settings, "Settings",
+                            "Updates and community preferences")
 
-        # Updates card
-        c1 = self._card(self.page_settings, hover=False)
-        c1.pack(fill="x", pady=8)
-        ctk.CTkFrame(c1, height=3, fg_color=self.c_accent, corner_radius=0).pack(fill="x")
+        ctk.CTkLabel(self.page_settings, text="General",
+                     font=self._font(13, "bold"), text_color=self.c_text_tert
+                     ).pack(anchor="w", pady=(0, 8))
+
+        c1 = self._group_card(self.page_settings)
+        c1.pack(fill="x", pady=(0, 20))
         i1 = ctk.CTkFrame(c1, fg_color="transparent")
-        i1.pack(padx=22, pady=20, fill="x")
+        i1.pack(padx=20, pady=18, fill="x")
         ctk.CTkLabel(i1, text="Software Updates",
-                     font=ctk.CTkFont("Segoe UI",13,weight="bold")).pack(anchor="w",pady=(0,10))
-        self.sw_auto_check = ctk.CTkSwitch(i1, text="Check for Updates on Startup",
-                                            progress_color=self.c_accent,
-                                            command=self._save_settings)
-        if self._config.get("auto_check_updates", True): self.sw_auto_check.select()
-        self.sw_auto_check.pack(anchor="w", pady=4)
-        self.sw_auto_dl = ctk.CTkSwitch(i1, text="Download Automatically (Beta)",
-                                         progress_color=self.c_accent,
-                                         command=self._save_settings)
-        if self._config.get("auto_download_updates", False): self.sw_auto_dl.select()
-        self.sw_auto_dl.pack(anchor="w", pady=4)
-        self.btn_check_update = ctk.CTkButton(i1, text="Check for Updates",
-                                               fg_color=self.c_card_hi,
-                                               hover_color=self.c_accent,
-                                               corner_radius=10,
-                                               command=self._manual_check_update)
-        self.btn_check_update.pack(anchor="w", pady=(14,0))
-        self.update_status_label = ctk.CTkLabel(i1, text="",
-                                                 text_color=self.c_text_dim)
-        self.update_status_label.pack(anchor="w")
+                     font=self._font(15, "bold"), text_color=self.c_text
+                     ).pack(anchor="w", pady=(0, 12))
+        self.sw_auto_check = ctk.CTkSwitch(
+            i1, text="Check for updates on startup",
+            font=self._font(13), progress_color=self.c_accent,
+            command=self._save_settings)
+        if self._config.get("auto_check_updates", True):
+            self.sw_auto_check.select()
+        self.sw_auto_check.pack(anchor="w", pady=6)
+        self.sw_auto_dl = ctk.CTkSwitch(
+            i1, text="Download updates automatically (Beta)",
+            font=self._font(13), progress_color=self.c_accent,
+            command=self._save_settings)
+        if self._config.get("auto_download_updates", False):
+            self.sw_auto_dl.select()
+        self.sw_auto_dl.pack(anchor="w", pady=6)
+        self.btn_check_update = self._secondary_btn(
+            i1, "Check for Updates", self._manual_check_update, height=34)
+        self.btn_check_update.pack(anchor="w", pady=(14, 0))
+        self.update_status_label = ctk.CTkLabel(
+            i1, text="", text_color=self.c_text_dim, font=self._font(12))
+        self.update_status_label.pack(anchor="w", pady=(8, 0))
 
-        # Community card
-        c2 = self._card(self.page_settings, hover=False)
-        c2.pack(fill="x", pady=8)
-        ctk.CTkFrame(c2, height=3, fg_color=self.c_accent2, corner_radius=0).pack(fill="x")
+        ctk.CTkLabel(self.page_settings, text="Community",
+                     font=self._font(13, "bold"), text_color=self.c_text_tert
+                     ).pack(anchor="w", pady=(0, 8))
+
+        c2 = self._group_card(self.page_settings)
+        c2.pack(fill="x")
         i2 = ctk.CTkFrame(c2, fg_color="transparent")
-        i2.pack(padx=22, pady=20, fill="x")
+        i2.pack(padx=20, pady=18, fill="x")
         ctk.CTkLabel(i2, text="Community & Support",
-                     font=ctk.CTkFont("Segoe UI",13,weight="bold")).pack(anchor="w",pady=(0,6))
-        ctk.CTkLabel(i2, text="Join our Discord for news and support:",
-                     text_color=self.c_text_dim).pack(anchor="w",pady=(0,10))
-        ctk.CTkButton(i2, text="🎮  JOIN DISCORD SERVER",
-                      fg_color="#5865F2", text_color="#FFFFFF",
-                      hover_color="#4752C4",
-                      font=ctk.CTkFont(weight="bold"), corner_radius=10,
-                      command=lambda: webbrowser.open("https://discord.gg/krzbgakKJf")
-                      ).pack(fill="x", pady=(0,12))
-        ctk.CTkButton(i2, text="SAVE SETTINGS",
-                      fg_color=self.c_accent, text_color="#FFFFFF",
-                      hover_color=self.c_accent_hov,
-                      font=ctk.CTkFont(weight="bold"), corner_radius=10,
-                      command=self._save_settings).pack(fill="x")
+                     font=self._font(15, "bold"), text_color=self.c_text
+                     ).pack(anchor="w", pady=(0, 6))
+        ctk.CTkLabel(i2, text="Join Discord for news and help.",
+                     font=self._font(13), text_color=self.c_text_dim
+                     ).pack(anchor="w", pady=(0, 12))
+        ctk.CTkButton(
+            i2, text="Open Discord",
+            fg_color="#5865F2", text_color=self.c_on_accent,
+            hover_color="#4752C4", font=self._font(13, "bold"),
+            corner_radius=self.r_md, height=36,
+            command=lambda: webbrowser.open("https://discord.gg/krzbgakKJf")
+        ).pack(fill="x", pady=(0, 10))
+        self._primary_btn(i2, "Save Settings", self._save_settings, height=36).pack(fill="x")
 
     def _save_settings(self, *args):
         try:
@@ -1053,6 +1098,7 @@ class GameInSteamApp(ctk.CTk):
     # ─────────────────────────────────────────────────────────────────────────
     def _check_system(self):
         try:
+            install_stplugin_dll()
             ok, msg = check_stplugin_system()
             if ok: self.sys_status_lbl.configure(
                 text=f"✅  {msg.split('!')[0]}!", text_color=self.c_success)
@@ -1163,7 +1209,7 @@ class GameInSteamApp(ctk.CTk):
             self.prog_bar.set(0)
             self.prog_bar.pack(fill="x", pady=(8,0))
         else:
-            self.btn_add.configure(state="normal", text="⚡  ADD TO LIBRARY")
+            self.btn_add.configure(state="normal", text="Add to Library")
             self.prog_bar.set(0); self.prog_bar.pack_forget()
 
     def _do_update(self, aid):

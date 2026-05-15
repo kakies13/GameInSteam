@@ -50,7 +50,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Messages]
 WelcomeLabel1=Welcome to [name] Setup
 WelcomeLabel2=This will install [name/ver] on your computer.%n%nGameInSteam lets you add any game to your Steam library in seconds — directly from the gamelist repo, no Chrome required.%n%nClick Next to continue.
-FinishedLabel=Setup has finished installing [name] on your computer.%n%nClick Finish to close Setup.
+FinishedLabel=Setup has finished installing [name] on your computer.%n%nSteam plugin (xinput1_4.dll) was configured automatically if Steam is installed.%n%nClick Finish to launch or close Setup.
 FinishedHeadingLabel=Completing [name] Setup
 
 [Tasks]
@@ -64,6 +64,7 @@ Source: "logo.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "logo.png"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "VERSION.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "xinput1_4.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]
 Name: "{app}"; Permissions: users-full
@@ -90,6 +91,113 @@ Type: files; Name: "{app}\.gameinsteam_session.json"
 Type: dirifempty; Name: "{app}"
 
 [Code]
+const
+  MIN_XINPUT_DLL_SIZE = 200000;
+
+function GetSteamInstallPath(): String;
+var
+  Path: String;
+begin
+  Result := '';
+  if RegQueryStringValue(HKLM, 'SOFTWARE\WOW6432Node\Valve\Steam', 'InstallPath', Path) then
+  begin
+    if Path <> '' then
+    begin
+      Result := Path;
+      Exit;
+    end;
+  end;
+  if RegQueryStringValue(HKCU, 'Software\Valve\Steam', 'InstallPath', Path) then
+  begin
+    if Path <> '' then
+    begin
+      Result := Path;
+      Exit;
+    end;
+  end;
+  if DirExists(ExpandConstant('{pf32}\Steam')) then
+    Result := ExpandConstant('{pf32}\Steam');
+end;
+
+function GetFileSizeBytes(const FileName: String): Int64;
+var
+  FindRec: TFindRec;
+begin
+  Result := 0;
+  if FindFirst(FileName, FindRec) then
+  try
+    Result := FindRec.SizeLow;
+  finally
+    FindClose(FindRec);
+  end;
+end;
+
+function NeedsXInputInstall(const DestPath: String): Boolean;
+begin
+  if not FileExists(DestPath) then
+  begin
+    Result := True;
+    Exit;
+  end;
+  Result := GetFileSizeBytes(DestPath) < MIN_XINPUT_DLL_SIZE;
+end;
+
+procedure StopSteamIfRunning();
+var
+  ResultCode: Integer;
+begin
+  if Exec('taskkill', '/F /IM steam.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Sleep(2000);
+end;
+
+procedure InstallXInputToSteam();
+var
+  SteamPath, SrcDll, DestDll: String;
+  ResultCode: Integer;
+begin
+  SteamPath := GetSteamInstallPath();
+  if SteamPath = '' then
+  begin
+    Log('Steam install path not found — skipped xinput1_4.dll setup.');
+    Exit;
+  end;
+
+  SrcDll := ExpandConstant('{app}\xinput1_4.dll');
+  DestDll := SteamPath + '\xinput1_4.dll';
+
+  if not FileExists(SrcDll) then
+  begin
+    Log('Bundled xinput1_4.dll missing in installer package.');
+    Exit;
+  end;
+
+  if not NeedsXInputInstall(DestDll) then
+  begin
+    Log('xinput1_4.dll already present in Steam — skipped.');
+    Exit;
+  end;
+
+  StopSteamIfRunning();
+
+  if FileExists(DestDll) then
+    DeleteFile(DestDll);
+
+  if CopyFile(SrcDll, DestDll, False) then
+    Log('xinput1_4.dll installed to: ' + DestDll)
+  else
+    MsgBox(
+      'GameInSteam could not install xinput1_4.dll to your Steam folder.' + #13#10 +
+      'Path: ' + DestDll + #13#10#13#10 +
+      'Run the installer as Administrator or copy xinput1_4.dll manually.',
+      mbError, MB_OK);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    InstallXInputToSteam();
+end;
+
 function InitializeSetup(): Boolean;
 var
   OldVersion: String;
